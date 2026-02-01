@@ -1,0 +1,88 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { MaterialIcon } from "@/components/ui/material-icon";
+
+const navItems = [
+  { href: "/dashboard/staff", label: "Live Queue", icon: "group" },
+  { href: "/dashboard/staff/insights", label: "Insights", icon: "analytics" },
+  { href: "/dashboard/staff/logs", label: "Patient Logs", icon: "receipt_long" },
+  { href: "/dashboard/staff/schedule", label: "Staff Schedule", icon: "calendar_month" },
+];
+
+export function StaffSidebar() {
+  const pathname = usePathname();
+
+  return (
+    <aside className="w-64 border-r border-[#cfe7e5] dark:border-[#1e3a37] flex flex-col justify-between p-4 bg-white dark:bg-[#152a28] shrink-0">
+      <div className="flex flex-col gap-8">
+        <div className="flex items-center gap-3 px-2">
+          <div className="size-8 bg-primary rounded-lg flex items-center justify-center text-background-dark shrink-0">
+            <MaterialIcon icon="health_metrics" size={24} />
+          </div>
+          <div>
+            <h1 className="text-lg font-bold leading-tight text-[#0d1b1a] dark:text-white">
+              City Clinic
+            </h1>
+            <div className="flex items-center gap-1">
+              <span className="size-2 rounded-full bg-primary animate-pulse" />
+              <p className="text-[#4c9a93] text-xs font-medium">Sync Active</p>
+            </div>
+          </div>
+        </div>
+        <nav className="flex flex-col gap-2">
+          {navItems.map((item) => {
+            const isActive = pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${
+                  isActive
+                    ? "bg-primary/10 text-[#0d1b1a] dark:text-primary"
+                    : "text-[#4c9a93] hover:bg-background-light dark:hover:bg-background-dark"
+                }`}
+              >
+                <MaterialIcon
+                  icon={item.icon as "group" | "analytics" | "receipt_long" | "calendar_month"}
+                  size={22}
+                  className={isActive ? "fill-primary" : ""}
+                />
+                <p className={`text-sm font-medium ${isActive ? "font-bold" : ""}`}>
+                  {item.label}
+                </p>
+              </Link>
+            );
+          })}
+          <Link
+            href="/dashboard/staff/settings"
+            className="flex items-center gap-3 px-3 py-2.5 text-[#4c9a93] hover:bg-background-light dark:hover:bg-background-dark rounded-xl cursor-pointer transition-colors mt-4"
+          >
+            <MaterialIcon icon="settings" size={22} />
+            <p className="text-sm font-medium">Settings</p>
+          </Link>
+        </nav>
+      </div>
+      <div className="flex flex-col gap-4">
+        <div className="p-4 bg-background-light dark:bg-background-dark rounded-xl border border-[#cfe7e5] dark:border-[#1e3a37]">
+          <p className="text-xs font-bold text-[#4c9a93] uppercase tracking-wider mb-2">
+            Network Status
+          </p>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-[#0d1b1a] dark:text-white">
+              Local Cache
+            </span>
+            <span className="text-[10px] bg-primary/20 text-primary px-2 py-0.5 rounded-full font-bold">
+              98% Full
+            </span>
+          </div>
+        </div>
+        <button className="flex w-full items-center justify-center gap-2 rounded-xl h-12 bg-urgency-emergency text-white text-sm font-bold tracking-wide hover:opacity-90 transition-opacity">
+          <MaterialIcon icon="warning" size={20} />
+          <span>Emergency Entry</span>
+        </button>
+      </div>
+    </aside>
+  );
+}

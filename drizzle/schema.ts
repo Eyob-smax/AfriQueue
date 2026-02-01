@@ -61,7 +61,7 @@ export const users = pgTable("users", {
   full_name: text("full_name").notNull(),
   email: text("email").notNull(),
   phone: text("phone").notNull(),
-  password_hash: text("password_hash").notNull(),
+  password_hash: text("password_hash"), // optional when synced from Supabase Auth
   role: userRoleEnum("role").notNull(),
   status: varchar("status", [20]).default("ACTIVE"),
   created_at: timestamp("created_at").defaultNow(),

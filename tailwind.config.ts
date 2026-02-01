@@ -6,8 +6,6 @@ import lineClamp from "@tailwindcss/line-clamp";
 
 const config: Config = {
   content: [
-    "./index.html",
-    "./src/**/*.{html,js,ts,jsx,tsx,vue,svelte}",
     "./components/**/*.{html,js,ts,jsx,tsx,vue,svelte}",
     "./app/**/*.{html,js,ts,jsx,tsx,vue,svelte}",
   ],
@@ -38,18 +36,8 @@ const config: Config = {
         "4xl": "2rem",
       },
       fontFamily: {
-        sans: [
-          "Inter",
-          "ui-sans-serif",
-          "system-ui",
-          "-apple-system",
-          "Segoe UI",
-          "Roboto",
-          "Helvetica Neue",
-          "Arial",
-          "Lexend",
-          "sans-serif",
-        ],
+        sans: ["Lexend", "ui-sans-serif", "system-ui", "sans-serif"],
+        display: ["Lexend", "sans-serif"],
         serif: ["Georgia", "Cambria", "Times New Roman", "Times", "serif"],
         mono: [
           "ui-monospace",
@@ -59,6 +47,14 @@ const config: Config = {
           "Roboto Mono",
           "monospace",
         ],
+      },
+      borderRadius: {
+        DEFAULT: "0.5rem",
+        lg: "1rem",
+        xl: "1.5rem",
+        "2xl": "1.5rem",
+        "3xl": "2rem",
+        full: "9999px",
       },
       boxShadow: {
         xlsoft: "0 10px 30px rgba(2,6,23,0.15)",

@@ -1,16 +1,23 @@
-import { HeartPulse } from "lucide-react";
+import Link from "next/link";
+import { MaterialIcon } from "@/components/ui/material-icon";
 
-export function Logo() {
+interface LogoProps {
+  showText?: boolean;
+  className?: string;
+  href?: string;
+}
+
+export function Logo({ showText = true, className, href = "/" }: LogoProps) {
   return (
-    <div className="flex justify-center">
-      <div className="flex items-center gap-2">
-        <div className="bg-primary p-2 rounded-lg">
-          <HeartPulse className="text-white w-7 h-7" />
-        </div>
-        <span className="text-2xl font-bold text-[#0d1b1a] dark:text-white">
+    <Link href={href} className={`flex items-center gap-2 ${className ?? ""}`}>
+      <div className="size-10 bg-primary rounded-lg flex items-center justify-center text-white shrink-0">
+        <MaterialIcon icon="health_and_safety" size={28} />
+      </div>
+      {showText && (
+        <span className="text-xl font-bold leading-tight tracking-tight text-[#0d1b1a] dark:text-white">
           AfriCare
         </span>
-      </div>
-    </div>
+      )}
+    </Link>
   );
 }
