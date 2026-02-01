@@ -3,11 +3,16 @@ import { getCurrentUserRole } from "@/lib/actions/auth";
 import { getConversations } from "@/lib/actions/chat";
 import { ChatPageClient } from "@/components/dashboard/ChatPageClient";
 
-export default async function ChatPage() {
+export default async function ChatPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ conversation?: string }>;
+}) {
   const user = await getCurrentUserRole();
   if (!user) redirect("/auth/login");
 
   const conversations = await getConversations();
+  const { conversation: openConversationId } = await searchParams;
 
   return (
     <div className="space-y-4">
@@ -17,6 +22,7 @@ export default async function ChatPage() {
       <ChatPageClient
         initialConversations={conversations}
         userId={user.userId}
+        initialOpenConversationId={openConversationId ?? undefined}
       />
     </div>
   );

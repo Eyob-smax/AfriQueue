@@ -18,6 +18,7 @@ interface ClinicsMapInnerProps {
   onSelect: (id: string) => void;
   userLat?: number;
   userLng?: number;
+  mapKey?: string;
 }
 
 function FlyToSelected({
@@ -48,6 +49,7 @@ export function ClinicsMapInner({
   onSelect,
   userLat,
   userLng,
+  mapKey,
 }: ClinicsMapInnerProps) {
   const centerLat = userLat ?? defaultCenter[0];
   const centerLng = userLng ?? defaultCenter[1];
@@ -59,6 +61,7 @@ export function ClinicsMapInner({
 
   return (
     <MapContainer
+      key={mapKey}
       center={center}
       zoom={12}
       style={{ height: "100%", width: "100%" }}

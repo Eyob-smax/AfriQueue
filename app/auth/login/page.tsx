@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { signIn } from "@/lib/actions/auth";
+import { useSearchParams } from "next/navigation";
+import { signIn, signInAdmin } from "@/lib/actions/auth";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,10 +14,14 @@ import { PhoneAuthForm } from "@/components/auth/PhoneAuthForm";
 type AuthTab = "email" | "phone";
 
 export default function LoginPage() {
+  const searchParams = useSearchParams();
+  const signInAsAdmin = searchParams.get("as") === "admin";
+  const showConfirmEmailNotice = searchParams.get("confirm_email") === "1";
   const [authTab, setAuthTab] = useState<AuthTab>("email");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [dismissConfirmNotice, setDismissConfirmNotice] = useState(false);
 
   async function handleGoogleSignIn() {
     setError(null);
@@ -46,7 +51,9 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     const formData = new FormData(e.currentTarget);
-    const result = await signIn(formData);
+    const result = signInAsAdmin
+      ? await signInAdmin(formData)
+      : await signIn(formData);
     if (result?.error) {
       setError(result.error);
       setLoading(false);
@@ -66,13 +73,37 @@ export default function LoginPage() {
           <Logo />
         </div>
 
+        {showConfirmEmailNotice && !dismissConfirmNotice && (
+          <div className="flex items-start gap-3 p-4 rounded-xl bg-primary/10 dark:bg-primary/20 border border-primary/30 dark:border-primary/40">
+            <MaterialIcon icon="mail" size={24} className="text-primary shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-[#0d1b1a] dark:text-white">
+                Check your email
+              </p>
+              <p className="text-sm text-[#4c9a93] dark:text-gray-300 mt-1">
+                We sent you a confirmation link. Click it to verify your account, then sign in below.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDismissConfirmNotice(true)}
+              className="shrink-0 p-1 rounded-lg hover:bg-primary/20 text-[#4c9a93] dark:text-gray-400 hover:text-[#0d1b1a] dark:hover:text-white transition-colors"
+              aria-label="Dismiss"
+            >
+              <MaterialIcon icon="close" size={20} />
+            </button>
+          </div>
+        )}
+
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-100 dark:border-slate-800 overflow-hidden">
           <div className="pt-10 pb-6 px-8 text-center">
             <h1 className="text-[#0d1b1a] dark:text-white tracking-tight text-[32px] font-bold leading-tight pb-3">
-              Welcome back
+              {signInAsAdmin ? "Admin sign in" : "Welcome back"}
             </h1>
             <p className="text-[#4c9a93] dark:text-gray-400 text-base font-normal leading-relaxed max-w-[400px] mx-auto">
-              Login to manage your clinic queue efficiently.
+              {signInAsAdmin
+                ? "Use your administrator email and password to access the admin dashboard."
+                : "Login to manage your clinic queue efficiently."}
             </p>
           </div>
 
@@ -150,6 +181,8 @@ export default function LoginPage() {
               <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
             )}
 
+            {!signInAsAdmin && (
+            <>
             <Button
               type="button"
               onClick={handleGoogleSignIn}
@@ -192,13 +225,15 @@ export default function LoginPage() {
                 <span className="bg-white dark:bg-slate-900 px-2 text-[#4c9a93]">or</span>
               </div>
             </div>
+            </>
+            )}
 
             <Button
               type="submit"
               disabled={loading}
               className="w-full h-14 rounded-xl bg-primary text-white text-lg font-bold hover:brightness-105 active:scale-[0.98] shadow-lg shadow-primary/20 flex items-center justify-center gap-2"
             >
-              {loading ? "Signing in…" : "Log In with Email"}
+              {loading ? "Signing in…" : signInAsAdmin ? "Admin sign in" : "Log In with Email"}
               <MaterialIcon icon="arrow_forward" size={20} />
             </Button>
 
@@ -213,10 +248,29 @@ export default function LoginPage() {
 
         <div className="flex flex-col items-center gap-4 text-center">
           <p className="text-[#4c9a93] dark:text-gray-500 text-sm">
-            New to AfriCare Queue?{" "}
-            <Link href="/auth/register" className="text-primary font-semibold hover:underline">
-              Create Account
-            </Link>
+            {signInAsAdmin ? (
+              <>
+                Not an admin?{" "}
+                <Link href="/auth/login" className="text-primary font-semibold hover:underline">
+                  Sign in as client or staff
+                </Link>
+              </>
+            ) : (
+              <>
+                New to AfriCare Queue?{" "}
+                <Link href="/auth/register" className="text-primary font-semibold hover:underline">
+                  Create Account
+                </Link>
+                {" · "}
+                <Link href="/auth/register/staff" className="text-primary font-semibold hover:underline">
+                  Register as Staff
+                </Link>
+                {" · "}
+                <Link href="/auth/login?as=admin" className="text-primary font-semibold hover:underline">
+                  Sign in as admin
+                </Link>
+              </>
+            )}
           </p>
           <div className="flex gap-4">
             <Link

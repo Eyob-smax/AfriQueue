@@ -10,15 +10,33 @@ import { Logo } from "@/components/onboarding/Logo";
 import { MaterialIcon } from "@/components/ui/material-icon";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PhoneAuthForm } from "@/components/auth/PhoneAuthForm";
+import { COUNTRIES, getCitiesForCountry, getCountryPhoneCode } from "@/lib/constants/locations";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type AuthTab = "email" | "phone";
+type RegStep = 1 | 2;
 
 export default function RegisterPage() {
+  const [regStep, setRegStep] = useState<RegStep>(1);
+  const [country, setCountry] = useState("");
+  const [city, setCity] = useState("");
   const [authTab, setAuthTab] = useState<AuthTab>("email");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [terms, setTerms] = useState(false);
+
+  const cities = country ? getCitiesForCountry(country) : [];
+  const countryLabel = COUNTRIES.find((c) => c.value === country)?.label ?? country;
+  const cityLabel = cities.find((c) => c.value === city)?.label ?? city;
+  const countryCode = country ? getCountryPhoneCode(country) : "";
+  const canProceedFromStep1 = country && city;
 
   async function handleGoogleSignUp() {
     setError(null);
@@ -103,7 +121,7 @@ export default function RegisterPage() {
             <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/10 border border-primary/20">
               <MaterialIcon icon="assignment_ind" size={20} className="text-primary" />
               <span className="text-[#0d1b1a] dark:text-white text-sm font-bold">
-                Step 1 of 3
+                Step {regStep} of 2
               </span>
             </div>
           </div>
@@ -115,14 +133,62 @@ export default function RegisterPage() {
                   Registration Progress
                 </p>
                 <p className="text-[#0d1b1a] dark:text-white text-sm font-normal leading-normal">
-                  33%
+                  {regStep === 1 ? "50%" : "100%"}
                 </p>
               </div>
               <div className="rounded-full bg-[#cfe7e5] dark:bg-gray-700 h-2 overflow-hidden">
-                <div className="h-2 rounded-full bg-primary" style={{ width: "33%" }} />
+                <div className="h-2 rounded-full bg-primary" style={{ width: regStep === 1 ? "50%" : "100%" }} />
               </div>
             </div>
 
+            {regStep === 1 ? (
+              <div className="p-8 flex flex-col gap-6">
+                <p className="text-[#0d1b1a] dark:text-white text-base font-medium">
+                  Select your country and city so we can show clinics near you and use the correct phone format.
+                </p>
+                <div className="flex flex-col gap-2">
+                  <label className="flex flex-col w-full">
+                    <p className="text-[#0d1b1a] dark:text-white text-sm font-medium pb-2">Country</p>
+                    <Select value={country} onValueChange={(v) => { setCountry(v); setCity(""); }}>
+                      <SelectTrigger className="rounded-xl h-14 bg-background-light dark:bg-background-dark border-[#cfe7e5] dark:border-[#1e3a38]">
+                        <SelectValue placeholder="Select country" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {COUNTRIES.map((c) => (
+                          <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </label>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="flex flex-col w-full">
+                    <p className="text-[#0d1b1a] dark:text-white text-sm font-medium pb-2">City</p>
+                    <Select value={city} onValueChange={setCity} disabled={!country}>
+                      <SelectTrigger className="rounded-xl h-14 bg-background-light dark:bg-background-dark border-[#cfe7e5] dark:border-[#1e3a38]">
+                        <SelectValue placeholder="Select city" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {cities.map((c) => (
+                          <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </label>
+                </div>
+                {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+                <Button
+                  type="button"
+                  disabled={!canProceedFromStep1}
+                  onClick={() => { setRegStep(2); setError(null); }}
+                  className="w-full h-14 rounded-xl bg-primary text-[#0d1b1a] font-bold text-lg"
+                >
+                  Continue to create account
+                  <MaterialIcon icon="arrow_forward" size={20} className="ml-2" />
+                </Button>
+              </div>
+            ) : (
+              <>
             <div className="flex border-b border-[#e7f3f2] dark:border-[#1e3a38] mx-8 mt-4">
               <button
                 type="button"
@@ -150,7 +216,12 @@ export default function RegisterPage() {
 
             {authTab === "phone" ? (
               <div className="p-8">
-                <PhoneAuthForm mode="signup" />
+                <PhoneAuthForm
+                  mode="signup"
+                  countryCode={countryCode}
+                  countryLabel={countryLabel}
+                  cityLabel={cityLabel}
+                />
                 <div className="mt-6 flex flex-col gap-3">
                   <Button
                     type="button"
@@ -170,6 +241,8 @@ export default function RegisterPage() {
               </div>
             ) : (
             <form onSubmit={handleSubmit} className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+              <input type="hidden" name="country" value={countryLabel} />
+              <input type="hidden" name="city" value={cityLabel} />
               <div className="flex flex-col gap-6">
                 <div>
                   <h3 className="text-[#0d1b1a] dark:text-white text-2xl font-bold leading-tight pb-2">
@@ -177,6 +250,9 @@ export default function RegisterPage() {
                   </h3>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
                     Please provide your details as they appear on your ID.
+                  </p>
+                  <p className="text-xs text-[#4c9a93] mt-1">
+                    Location: {countryLabel}, {cityLabel}
                   </p>
                 </div>
 
@@ -385,6 +461,17 @@ export default function RegisterPage() {
                 </div>
               </div>
             </form>
+            )}
+              <div className="px-8 pb-4">
+                <button
+                  type="button"
+                  onClick={() => setRegStep(1)}
+                  className="text-sm text-[#4c9a93] hover:text-primary"
+                >
+                  ← Change country or city
+                </button>
+              </div>
+              </>
             )}
           </div>
 

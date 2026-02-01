@@ -4,12 +4,13 @@ import { StaffSidebar } from "./StaffSidebar";
 
 interface StaffLayoutProps {
   children: React.ReactNode;
+  healthCenterName?: string | null;
 }
 
-export function StaffLayout({ children }: StaffLayoutProps) {
+export function StaffLayout({ children, healthCenterName }: StaffLayoutProps) {
   return (
     <div className="flex h-screen overflow-hidden bg-background-light dark:bg-background-dark">
-      <StaffSidebar />
+      <StaffSidebar healthCenterName={healthCenterName ?? undefined} />
       <div className="flex-1 flex flex-col overflow-hidden">
         {children}
       </div>

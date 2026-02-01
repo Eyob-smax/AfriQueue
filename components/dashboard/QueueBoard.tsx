@@ -2,29 +2,63 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { advanceQueue, cancelReservation, getQueueState } from "@/lib/actions/queue";
-import type { QueueReservation, QueueState } from "@/lib/actions/queue";
+import { useRouter } from "next/navigation";
+import { advanceQueue, cancelReservation, getQueueState, createQueue, updateQueue, getQueuesByHealthCenter } from "@/lib/actions/queue";
+import type { QueueReservation, QueueState, QueueForStaff } from "@/lib/actions/queue";
+import { getOrCreateDirectConversation } from "@/lib/actions/chat";
 import { Button } from "@/components/ui/button";
 import { MaterialIcon } from "@/components/ui/material-icon";
 import { ClinicInsights } from "@/components/dashboard/ClinicInsights";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface QueueBoardProps {
   userId: string;
+  healthCenterId: string | null;
+  healthCenterName: string | null;
+  initialQueues: QueueForStaff[];
 }
 
 type FilterTab = "all" | "emergency" | "medium" | "low";
 
-export function QueueBoard({ userId: _userId }: QueueBoardProps) {
+export function QueueBoard({ userId: _userId, healthCenterId, healthCenterName, initialQueues }: QueueBoardProps) {
+  const router = useRouter();
   const [queueId, setQueueId] = useState<string | null>(null);
+  const [queues, setQueues] = useState<QueueForStaff[]>(initialQueues);
   const [queueState, setQueueState] = useState<QueueState | null>(null);
   const [filterTab, setFilterTab] = useState<FilterTab>("all");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [newServiceType, setNewServiceType] = useState("");
+  const [newQueueDate, setNewQueueDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [messageLoadingClientId, setMessageLoadingClientId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!queueId) return;
     getQueueState(queueId).then(setQueueState);
   }, [queueId]);
+
+  async function refreshQueues() {
+    if (!healthCenterId) return;
+    const list = await getQueuesByHealthCenter(healthCenterId);
+    setQueues(list);
+  }
 
   async function handleAdvance(reservationId: string) {
     setError(null);
@@ -42,6 +76,45 @@ export function QueueBoard({ userId: _userId }: QueueBoardProps) {
     if (result.error) setError(result.error);
     else if (queueId) getQueueState(queueId).then(setQueueState);
     setLoading(false);
+  }
+
+  async function handleCreateQueue(e: React.FormEvent) {
+    e.preventDefault();
+    if (!healthCenterId) return;
+    setCreateLoading(true);
+    setError(null);
+    const result = await createQueue(healthCenterId, {
+      service_type: newServiceType || undefined,
+      queue_date: new Date(newQueueDate),
+      status: "ACTIVE",
+    });
+    if (result.error) setError(result.error);
+    else {
+      setCreateOpen(false);
+      setNewServiceType("");
+      setNewQueueDate(new Date().toISOString().slice(0, 10));
+      await refreshQueues();
+      router.refresh();
+    }
+    setCreateLoading(false);
+  }
+
+  async function handleUpdateQueueStatus(qId: string, status: string) {
+    setError(null);
+    setLoading(true);
+    const result = await updateQueue(qId, { status });
+    if (result.error) setError(result.error);
+    else await refreshQueues();
+    setLoading(false);
+  }
+
+  async function handleMessageClient(clientId: string) {
+    setError(null);
+    setMessageLoadingClientId(clientId);
+    const result = await getOrCreateDirectConversation(clientId);
+    setMessageLoadingClientId(null);
+    if (result.error) setError(result.error);
+    else if (result.conversationId) router.push(`/dashboard/chat?conversation=${result.conversationId}`);
   }
 
   const reservations = queueState?.reservations ?? [];
@@ -89,7 +162,7 @@ export function QueueBoard({ userId: _userId }: QueueBoardProps) {
           <div className="h-8 w-[1px] bg-[#cfe7e5] dark:border-[#1e3a37] mx-2" />
           <div className="flex items-center gap-3">
             <p className="text-sm font-bold hidden sm:block text-[#0d1b1a] dark:text-white">
-              Admin Sarah
+              {healthCenterName ?? "Staff"}
             </p>
             <div className="size-10 rounded-full bg-primary/20 border-2 border-primary shrink-0" />
           </div>
@@ -98,7 +171,7 @@ export function QueueBoard({ userId: _userId }: QueueBoardProps) {
 
       <div className="flex-1 overflow-y-auto p-8 flex gap-8">
         <div className="flex-1 flex flex-col gap-6 min-w-0">
-          <div className="flex items-end justify-between">
+          <div className="flex items-end justify-between flex-wrap gap-4">
             <div>
               <h2 className="text-3xl font-black text-[#0d1b1a] dark:text-white leading-none">
                 Queue Board
@@ -107,10 +180,39 @@ export function QueueBoard({ userId: _userId }: QueueBoardProps) {
                 {dateStr} • {timeStr}
               </p>
             </div>
-            <Button className="flex items-center gap-2 px-6 h-12 bg-primary text-background-dark rounded-xl font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-transform">
-              <MaterialIcon icon="campaign" size={22} />
-              <span>Call Next Patient</span>
-            </Button>
+            <div className="flex items-center gap-3 flex-wrap">
+              {healthCenterId && (
+                <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="rounded-xl">
+                      Create queue
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Create queue</DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={handleCreateQueue} className="space-y-4">
+                      <div>
+                        <Label htmlFor="service_type">Service type</Label>
+                        <Input id="service_type" value={newServiceType} onChange={(e) => setNewServiceType(e.target.value)} placeholder="e.g. General" className="rounded-xl mt-1" />
+                      </div>
+                      <div>
+                        <Label htmlFor="queue_date">Date</Label>
+                        <Input id="queue_date" type="date" value={newQueueDate} onChange={(e) => setNewQueueDate(e.target.value)} className="rounded-xl mt-1" />
+                      </div>
+                      <Button type="submit" disabled={createLoading}>{createLoading ? "Creating…" : "Create"}</Button>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              )}
+              {serving && (
+                <Button className="flex items-center gap-2 px-6 h-12 bg-primary text-background-dark rounded-xl font-bold shadow-lg shadow-primary/20" onClick={() => handleAdvance(serving.id)} disabled={loading}>
+                  <MaterialIcon icon="campaign" size={22} />
+                  <span>Call Next Patient</span>
+                </Button>
+              )}
+            </div>
           </div>
 
           <div className="border-b border-[#cfe7e5] dark:border-[#1e3a37] flex gap-8">
@@ -132,18 +234,29 @@ export function QueueBoard({ userId: _userId }: QueueBoardProps) {
             ))}
           </div>
 
-          {!queueId ? (
+          {!healthCenterId ? (
             <div className="p-6 bg-white dark:bg-[#152a28] border border-[#cfe7e5] dark:border-[#1e3a37] rounded-xl">
-              <p className="text-sm text-[#4c9a93] mb-4">
-                Select a queue to manage. Enter a queue ID from your clinic.
-              </p>
-              <input
-                type="text"
-                placeholder="Queue ID"
-                className="w-full max-w-md rounded-xl border border-[#cfe7e5] dark:border-[#1e3a37] bg-background-light dark:bg-background-dark px-4 py-3 text-sm text-[#0d1b1a] dark:text-white"
-                value={queueId ?? ""}
-                onChange={(e) => setQueueId(e.target.value || null)}
-              />
+              <p className="text-sm text-[#4c9a93]">No health center assigned. Contact admin to assign your account to a center.</p>
+            </div>
+          ) : !queueId ? (
+            <div className="p-6 bg-white dark:bg-[#152a28] border border-[#cfe7e5] dark:border-[#1e3a37] rounded-xl">
+              <p className="text-sm text-[#4c9a93] mb-4">Select a queue to manage.</p>
+              {queues.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No queues yet. Create one using the button above.</p>
+              ) : (
+                <Select value={queueId || ""} onValueChange={(v) => setQueueId(v || null)}>
+                  <SelectTrigger className="w-full max-w-md rounded-xl h-12">
+                    <SelectValue placeholder="Select queue" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {queues.map((q) => (
+                      <SelectItem key={q.id} value={q.id}>
+                        {q.service_type ?? "Queue"} • {q.queue_date ? new Date(q.queue_date).toLocaleDateString() : ""} ({q.count} waiting)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           ) : (
             <div className="flex flex-col gap-3">
@@ -171,10 +284,33 @@ export function QueueBoard({ userId: _userId }: QueueBoardProps) {
                         </p>
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <button className="size-10 rounded-lg flex items-center justify-center bg-background-light dark:bg-background-dark text-urgency-medium border border-[#cfe7e5] dark:border-[#1e3a37]">
-                        <MaterialIcon icon="pause" size={20} />
-                      </button>
+                    <div className="flex gap-2 flex-wrap">
+                      {serving.client_phone && (
+                        <a href={`tel:${serving.client_phone.replace(/\s/g, "")}`} className="inline-flex">
+                          <Button variant="outline" size="sm" className="rounded-lg gap-1">
+                            <MaterialIcon icon="call" size={18} />
+                            Call
+                          </Button>
+                        </a>
+                      )}
+                      {serving.client_email && (
+                        <a href={`mailto:${serving.client_email}`} className="inline-flex">
+                          <Button variant="outline" size="sm" className="rounded-lg gap-1">
+                            <MaterialIcon icon="mail" size={18} />
+                            Email
+                          </Button>
+                        </a>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-lg gap-1"
+                        onClick={() => handleMessageClient(serving.client_id)}
+                        disabled={messageLoadingClientId === serving.client_id}
+                      >
+                        <MaterialIcon icon="chat" size={18} />
+                        Message
+                      </Button>
                       <button
                         onClick={() => handleAdvance(serving.id)}
                         disabled={loading}
@@ -217,14 +353,33 @@ export function QueueBoard({ userId: _userId }: QueueBoardProps) {
                         </p>
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <button className="px-3 h-10 rounded-lg flex items-center gap-2 bg-background-light dark:bg-background-dark text-[#0d1b1a] dark:text-white border border-[#cfe7e5] dark:border-[#1e3a37] text-xs font-bold">
-                        <MaterialIcon icon="volume_up" size={16} />
-                        Call
-                      </button>
-                      <button className="size-10 rounded-lg flex items-center justify-center bg-background-light dark:bg-background-dark text-[#4c9a93] border border-[#cfe7e5] dark:border-[#1e3a37]">
-                        <MaterialIcon icon="schedule" size={18} />
-                      </button>
+                    <div className="flex gap-2 flex-wrap">
+                      {r.client_phone && (
+                        <a href={`tel:${r.client_phone.replace(/\s/g, "")}`} className="inline-flex">
+                          <Button variant="outline" size="sm" className="rounded-lg gap-1 text-xs">
+                            <MaterialIcon icon="call" size={16} />
+                            Call
+                          </Button>
+                        </a>
+                      )}
+                      {r.client_email && (
+                        <a href={`mailto:${r.client_email}`} className="inline-flex">
+                          <Button variant="outline" size="sm" className="rounded-lg gap-1 text-xs">
+                            <MaterialIcon icon="mail" size={16} />
+                            Email
+                          </Button>
+                        </a>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-lg gap-1 text-xs"
+                        onClick={() => handleMessageClient(r.client_id)}
+                        disabled={messageLoadingClientId === r.client_id}
+                      >
+                        <MaterialIcon icon="chat" size={16} />
+                        Message
+                      </Button>
                       {priority === "emergency" && (
                         <button
                           onClick={() => handleCancel(r.id)}

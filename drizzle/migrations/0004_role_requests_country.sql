@@ -1,0 +1,1 @@
+ALTER TABLE "role_requests" ADD COLUMN IF NOT EXISTS "health_center_country" text;

@@ -111,7 +111,13 @@ export const healthCenters = pgTable("health_centers", {
   address: text("address"),
   latitude: numeric("latitude", { precision: 10, scale: 6 }),
   longitude: numeric("longitude", { precision: 10, scale: 6 }),
-  status: varchar("status", [10]).default("OPEN"),
+  status: varchar("status", [20]).default("OPEN"),
+  description: text("description"),
+  services: text("services"),
+  specialties: varchar("specialties", { length: 100 }).array(),
+  operating_status: varchar("operating_status", [20]).default("OPEN"),
+  queue_availability: boolean("queue_availability").default(true),
+  is_blocked: boolean("is_blocked").default(false),
   created_at: timestamp("created_at").defaultNow(),
 });
 
@@ -121,6 +127,7 @@ export const queues = pgTable("queues", {
   service_type: text("service_type"),
   queue_date: timestamp("queue_date").notNull(),
   max_capacity: integer("max_capacity"),
+  status: varchar("status", [20]).default("ACTIVE"),
   created_at: timestamp("created_at").defaultNow(),
 });
 
@@ -193,12 +200,16 @@ export const roleRequests = pgTable("role_requests", {
 
   requested_role: roleRequestTypeEnum("requested_role").notNull(),
 
-  // Who approved/rejected (ADMIN or SUPER_ADMIN)
   reviewed_by: uuid("reviewed_by").references(() => users.id),
 
   status: roleRequestStatusEnum("status").default("PENDING"),
 
   reason: text("reason"),
+
+  health_center_name: text("health_center_name"),
+  health_center_description: text("health_center_description"),
+  health_center_location: text("health_center_location"),
+  health_center_country: text("health_center_country"),
 
   created_at: timestamp("created_at").defaultNow(),
   reviewed_at: timestamp("reviewed_at"),
@@ -210,5 +221,17 @@ export const notifications = pgTable("notifications", {
   type: varchar("type", [50]).notNull(),
   reference_id: uuid("reference_id"),
   is_read: boolean("is_read").default(false),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
+export const auditLogs = pgTable("audit_logs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  admin_id: uuid("admin_id")
+    .references(() => users.id)
+    .notNull(),
+  action: varchar("action", [100]).notNull(),
+  target_type: varchar("target_type", [50]).notNull(),
+  target_id: uuid("target_id"),
+  details: text("details"),
   created_at: timestamp("created_at").defaultNow(),
 });

@@ -20,7 +20,7 @@ export function ProfileCompletionBanner({ onDismiss }: ProfileCompletionBannerPr
   if (dismissed) return null;
 
   return (
-    <div className="sticky top-0 z-40 w-full bg-primary/15 dark:bg-primary/10 border-b border-primary/30">
+    <div className="z-40 w-full shrink-0 bg-primary/15 dark:bg-primary/10 border-b border-primary/30">
       <div className="flex items-center justify-between gap-4 px-4 md:px-6 py-3 max-w-[1200px] mx-auto">
         <div className="flex items-center gap-3 min-w-0">
           <div className="shrink-0 size-10 rounded-full bg-primary/20 flex items-center justify-center">

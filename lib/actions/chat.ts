@@ -183,3 +183,96 @@ export async function sendMessage(
 
   return { messageId: msg.id };
 }
+
+/** Get or create a DIRECT conversation between current user and another user. */
+export async function getOrCreateDirectConversation(
+  otherUserId: string
+): Promise<{ error?: string; conversationId?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user: authUser },
+  } = await supabase.auth.getUser();
+  if (!authUser) return { error: "Not authenticated" };
+  if (otherUserId === authUser.id) return { error: "Cannot chat with yourself" };
+
+  const myParticipations = await db
+    .select({ conversation_id: conversationParticipants.conversation_id })
+    .from(conversationParticipants)
+    .where(eq(conversationParticipants.user_id, authUser.id));
+  const convIds = myParticipations.map((p) => p.conversation_id);
+  if (convIds.length === 0) return createConversation([otherUserId], "DIRECT");
+
+  const directConvs = await db
+    .select({ id: conversations.id })
+    .from(conversations)
+    .where(
+      and(
+        inArray(conversations.id, convIds),
+        eq(conversations.type, "DIRECT"),
+        eq(conversations.is_active, true)
+      )
+    );
+
+  for (const c of directConvs) {
+    const participants = await db
+      .select({ user_id: conversationParticipants.user_id })
+      .from(conversationParticipants)
+      .where(eq(conversationParticipants.conversation_id, c.id));
+    const ids = new Set(participants.map((p) => p.user_id));
+    if (ids.has(authUser.id) && ids.has(otherUserId) && ids.size === 2) {
+      return { conversationId: c.id };
+    }
+  }
+
+  return createConversation([otherUserId], "DIRECT");
+}
+
+/** Get or create a SUPPORT conversation (staff with admin). Returns one admin's conversation. */
+export async function getOrCreateSupportConversation(): Promise<{
+  error?: string;
+  conversationId?: string;
+}> {
+  const supabase = await createClient();
+  const {
+    data: { user: authUser },
+  } = await supabase.auth.getUser();
+  if (!authUser) return { error: "Not authenticated" };
+
+  const adminUsers = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(inArray(users.role, ["ADMIN", "SUPER_ADMIN"]))
+    .limit(1);
+  const adminId = adminUsers[0]?.id;
+  if (!adminId) return { error: "No admin available for support" };
+
+  const myParticipations = await db
+    .select({ conversation_id: conversationParticipants.conversation_id })
+    .from(conversationParticipants)
+    .where(eq(conversationParticipants.user_id, authUser.id));
+  const convIds = myParticipations.map((p) => p.conversation_id);
+  if (convIds.length > 0) {
+    const supportConvs = await db
+      .select({ id: conversations.id })
+      .from(conversations)
+      .where(
+        and(
+          inArray(conversations.id, convIds),
+          eq(conversations.type, "SUPPORT"),
+          eq(conversations.is_active, true)
+        )
+      );
+    for (const c of supportConvs) {
+      const participants = await db
+        .select({ user_id: conversationParticipants.user_id })
+        .from(conversationParticipants)
+        .where(eq(conversationParticipants.conversation_id, c.id));
+      const ids = new Set(participants.map((p) => p.user_id));
+      if (ids.has(authUser.id) && ids.has(adminId)) {
+        return { conversationId: c.id };
+      }
+    }
+  }
+
+  return createConversation([adminId], "SUPPORT");
+}

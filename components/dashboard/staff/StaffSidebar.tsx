@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { MaterialIcon } from "@/components/ui/material-icon";
+import { getOrCreateSupportConversation } from "@/lib/actions/chat";
 
 const navItems = [
   { href: "/dashboard/staff", label: "Live Queue", icon: "group" },
@@ -11,8 +13,23 @@ const navItems = [
   { href: "/dashboard/staff/schedule", label: "Staff Schedule", icon: "calendar_month" },
 ];
 
-export function StaffSidebar() {
+interface StaffSidebarProps {
+  healthCenterName?: string;
+}
+
+export function StaffSidebar({ healthCenterName }: StaffSidebarProps = {}) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [supportLoading, setSupportLoading] = useState(false);
+
+  async function handleContactSupport() {
+    setSupportLoading(true);
+    const result = await getOrCreateSupportConversation();
+    setSupportLoading(false);
+    if (!result.error && result.conversationId) {
+      router.push(`/dashboard/chat?conversation=${result.conversationId}`);
+    }
+  }
 
   return (
     <aside className="w-64 border-r border-[#cfe7e5] dark:border-[#1e3a37] flex flex-col justify-between p-4 bg-white dark:bg-[#152a28] shrink-0">
@@ -23,7 +40,7 @@ export function StaffSidebar() {
           </div>
           <div>
             <h1 className="text-lg font-bold leading-tight text-[#0d1b1a] dark:text-white">
-              City Clinic
+              {healthCenterName ?? "Clinic"}
             </h1>
             <div className="flex items-center gap-1">
               <span className="size-2 rounded-full bg-primary animate-pulse" />
@@ -56,8 +73,28 @@ export function StaffSidebar() {
             );
           })}
           <Link
+            href="/dashboard/chat"
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors mt-4 ${
+              pathname === "/dashboard/chat"
+                ? "bg-primary/10 text-[#0d1b1a] dark:text-primary"
+                : "text-[#4c9a93] hover:bg-background-light dark:hover:bg-background-dark"
+            }`}
+          >
+            <MaterialIcon icon="chat" size={22} className={pathname === "/dashboard/chat" ? "fill-primary" : ""} />
+            <p className={`text-sm font-medium ${pathname === "/dashboard/chat" ? "font-bold" : ""}`}>Messages</p>
+          </Link>
+          <button
+            type="button"
+            onClick={handleContactSupport}
+            disabled={supportLoading}
+            className="flex items-center gap-3 px-3 py-2.5 w-full text-left text-[#4c9a93] hover:bg-background-light dark:hover:bg-background-dark rounded-xl cursor-pointer transition-colors disabled:opacity-50"
+          >
+            <MaterialIcon icon="support_agent" size={22} />
+            <p className="text-sm font-medium">Contact support</p>
+          </button>
+          <Link
             href="/dashboard/staff/settings"
-            className="flex items-center gap-3 px-3 py-2.5 text-[#4c9a93] hover:bg-background-light dark:hover:bg-background-dark rounded-xl cursor-pointer transition-colors mt-4"
+            className="flex items-center gap-3 px-3 py-2.5 text-[#4c9a93] hover:bg-background-light dark:hover:bg-background-dark rounded-xl cursor-pointer transition-colors"
           >
             <MaterialIcon icon="settings" size={22} />
             <p className="text-sm font-medium">Settings</p>

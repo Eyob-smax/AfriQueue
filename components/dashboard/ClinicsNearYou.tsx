@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { connectSocket } from "@/lib/socket-client";
 import { joinQueue, getQueueState } from "@/lib/actions/queue";
 import type { HealthCenterWithQueues, QueueState } from "@/lib/actions/queue";
@@ -12,9 +13,12 @@ import { formatDistance } from "@/lib/geo";
 interface ClinicsNearYouProps {
   initialCenters: HealthCenterWithQueues[];
   city: string;
+  country?: string | null;
   userId: string;
   userLat?: number;
   userLng?: number;
+  /** When no geolocation, center the map on the user's city. */
+  defaultMapCenter?: { lat: number; lng: number };
 }
 
 type FilterTab = "nearest" | "shortest-wait" | "specialty";
@@ -28,10 +32,13 @@ function estimateWaitMinutes(count: number): string {
 export function ClinicsNearYou({
   initialCenters,
   city,
+  country,
   userId,
   userLat,
   userLng,
+  defaultMapCenter,
 }: ClinicsNearYouProps) {
+  const locationLabel = country ? `${city}, ${country}` : city;
   const [centers, setCenters] = useState(initialCenters);
   const [selectedCenterId, setSelectedCenterId] = useState<string | null>(null);
   const [filterTab, setFilterTab] = useState<FilterTab>("nearest");
@@ -220,6 +227,14 @@ export function ClinicsNearYou({
                     No queue
                   </Button>
                 )}
+                <Link
+                  href={`/dashboard/client/clinics/${hc.id}`}
+                  className="w-11 h-11 flex items-center justify-center rounded-lg bg-[#e7f3f2] dark:bg-[#2d4d4a] text-[#0d1b1a] dark:text-white hover:bg-[#cfe7e5] transition-colors"
+                  onClick={(e) => e.stopPropagation()}
+                  title="View details"
+                >
+                  <MaterialIcon icon="info" size={20} />
+                </Link>
                 <a
                   href={`https://www.google.com/maps/search/?api=1&query=${hc.latitude},${hc.longitude}`}
                   target="_blank"
@@ -237,7 +252,7 @@ export function ClinicsNearYou({
 
       {centers.length === 0 && (
         <p className="text-center text-[#4c9a93] py-8">
-          No clinics in {city} yet. Check back later or suggest a clinic.
+          No clinics in {locationLabel} yet. Check back later or suggest a clinic.
         </p>
       )}
 
@@ -247,13 +262,13 @@ export function ClinicsNearYou({
             centers={centers}
             selectedId={selectedCenterId}
             onSelect={setSelectedCenterId}
-            userLat={userLat}
-            userLng={userLng}
+            userLat={userLat ?? defaultMapCenter?.lat}
+            userLng={userLng ?? defaultMapCenter?.lng}
           />
           <div className="absolute bottom-4 left-4 z-10 bg-white dark:bg-[#1a3330] p-3 rounded-lg shadow-lg border border-[#cfe7e5] dark:border-[#2d4d4a] pointer-events-none">
             <p className="text-xs font-bold flex items-center gap-2 text-[#0d1b1a] dark:text-white">
               <span className="size-2 rounded-full bg-primary animate-pulse" />
-              You are here: {city} District
+              You are here: {locationLabel}
             </p>
           </div>
         </div>

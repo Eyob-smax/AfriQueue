@@ -1,0 +1,1 @@
+ALTER TABLE "role_requests" ADD COLUMN "health_center_country" text;

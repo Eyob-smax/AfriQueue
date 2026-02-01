@@ -7,6 +7,7 @@ import {
   healthCenters,
   queues,
   reservations,
+  staffProfiles,
 } from "@/drizzle/schema";
 import { eq, and, sql, max, inArray } from "drizzle-orm";
 import { emitToRoom } from "@/lib/socket-emit";
@@ -122,7 +123,133 @@ export type QueueReservation = {
   status: string;
   created_at: Date | null;
   client_name?: string;
+  client_phone?: string | null;
+  client_email?: string | null;
 };
+
+export type StaffCenter = {
+  health_center_id: string;
+  health_center_name: string;
+} | null;
+
+export async function getStaffHealthCenter(): Promise<StaffCenter> {
+  const supabase = await createClient();
+  const { data: { user: authUser } } = await supabase.auth.getUser();
+  if (!authUser) return null;
+  const [row] = await db
+    .select({
+      health_center_id: staffProfiles.health_center_id,
+      name: healthCenters.name,
+    })
+    .from(staffProfiles)
+    .leftJoin(healthCenters, eq(staffProfiles.health_center_id, healthCenters.id))
+    .where(eq(staffProfiles.user_id, authUser.id));
+  if (!row?.health_center_id || !row.name) return null;
+  return { health_center_id: row.health_center_id, health_center_name: row.name };
+}
+
+export type QueueForStaff = {
+  id: string;
+  service_type: string | null;
+  queue_date: Date | null;
+  status: string | null;
+  count: number;
+};
+
+export async function getQueuesByHealthCenter(healthCenterId: string): Promise<QueueForStaff[]> {
+  const supabase = await createClient();
+  const { data: { user: authUser } } = await supabase.auth.getUser();
+  if (!authUser) return [];
+  const [staff] = await db
+    .select({ health_center_id: staffProfiles.health_center_id })
+    .from(staffProfiles)
+    .where(eq(staffProfiles.user_id, authUser.id));
+  if (!staff || staff.health_center_id !== healthCenterId) return [];
+  const queueRows = await db
+    .select({
+      id: queues.id,
+      service_type: queues.service_type,
+      queue_date: queues.queue_date,
+      status: queues.status,
+    })
+    .from(queues)
+    .where(eq(queues.health_center_id, healthCenterId))
+    .orderBy(queues.queue_date);
+  const result: QueueForStaff[] = [];
+  for (const q of queueRows) {
+    const [c] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(reservations)
+      .where(
+        and(
+          eq(reservations.queue_id, q.id),
+          inArray(reservations.status, ["PENDING", "CONFIRMED"])
+        )
+      );
+    result.push({
+      id: q.id,
+      service_type: q.service_type,
+      queue_date: q.queue_date,
+      status: q.status ?? null,
+      count: Number(c?.count ?? 0),
+    });
+  }
+  return result;
+}
+
+export async function createQueue(healthCenterId: string, payload: {
+  service_type?: string;
+  queue_date: Date;
+  max_capacity?: number;
+  status?: string;
+}): Promise<{ error?: string; queueId?: string }> {
+  const supabase = await createClient();
+  const { data: { user: authUser } } = await supabase.auth.getUser();
+  if (!authUser) return { error: "Not authenticated" };
+  const [staff] = await db
+    .select({ health_center_id: staffProfiles.health_center_id })
+    .from(staffProfiles)
+    .where(eq(staffProfiles.user_id, authUser.id));
+  if (!staff || staff.health_center_id !== healthCenterId) return { error: "Forbidden" };
+  const [inserted] = await db
+    .insert(queues)
+    .values({
+      health_center_id: healthCenterId,
+      service_type: payload.service_type ?? null,
+      queue_date: payload.queue_date,
+      max_capacity: payload.max_capacity ?? null,
+      status: payload.status ?? "ACTIVE",
+    })
+    .returning({ id: queues.id });
+  if (!inserted) return { error: "Failed to create queue" };
+  return { queueId: inserted.id };
+}
+
+export async function updateQueue(queueId: string, payload: {
+  service_type?: string;
+  max_capacity?: number;
+  status?: string;
+}): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const { data: { user: authUser } } = await supabase.auth.getUser();
+  if (!authUser) return { error: "Not authenticated" };
+  const [q] = await db.select({ health_center_id: queues.health_center_id }).from(queues).where(eq(queues.id, queueId));
+  if (!q) return { error: "Queue not found" };
+  const [staff] = await db
+    .select({ health_center_id: staffProfiles.health_center_id })
+    .from(staffProfiles)
+    .where(eq(staffProfiles.user_id, authUser.id));
+  if (!staff || staff.health_center_id !== q.health_center_id) return { error: "Forbidden" };
+  await db
+    .update(queues)
+    .set({
+      ...(payload.service_type !== undefined && { service_type: payload.service_type }),
+      ...(payload.max_capacity !== undefined && { max_capacity: payload.max_capacity }),
+      ...(payload.status !== undefined && { status: payload.status }),
+    })
+    .where(eq(queues.id, queueId));
+  return {};
+}
 
 export type QueueState = {
   queueId: string;
@@ -140,6 +267,8 @@ export async function getQueueState(queueId: string): Promise<QueueState | null>
       status: reservations.status,
       created_at: reservations.created_at,
       full_name: users.full_name,
+      phone: users.phone,
+      email: users.email,
     })
     .from(reservations)
     .leftJoin(users, eq(reservations.client_id, users.id))
@@ -159,12 +288,14 @@ export async function getQueueState(queueId: string): Promise<QueueState | null>
 
   const reservationsList: QueueReservation[] = rows.map((r) => ({
     id: r.id,
-    queue_id: r.queue_id,
+    queue_id: r.queue_id ?? queueId,
     client_id: r.client_id ?? "",
     queue_number: r.queue_number,
     status: r.status ?? "PENDING",
     created_at: r.created_at,
     client_name: r.full_name ?? undefined,
+    client_phone: r.phone ?? undefined,
+    client_email: r.email ?? undefined,
   }));
 
   return {

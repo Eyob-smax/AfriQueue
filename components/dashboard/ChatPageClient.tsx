@@ -15,16 +15,21 @@ interface Conv {
 interface ChatPageClientProps {
   initialConversations: Conv[];
   userId: string;
+  initialOpenConversationId?: string;
 }
 
 export function ChatPageClient({
   initialConversations,
   userId,
+  initialOpenConversationId,
 }: ChatPageClientProps) {
   const [conversations] = useState(initialConversations);
-  const [selectedId, setSelectedId] = useState<string | null>(
-    conversations[0]?.id ?? null
-  );
+  const [selectedId, setSelectedId] = useState<string | null>(() => {
+    if (initialOpenConversationId && initialConversations.some((c) => c.id === initialOpenConversationId)) {
+      return initialOpenConversationId;
+    }
+    return conversations[0]?.id ?? null;
+  });
 
   const selected = conversations.find((c) => c.id === selectedId);
 

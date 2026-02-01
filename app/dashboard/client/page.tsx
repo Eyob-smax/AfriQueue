@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUserRole } from "@/lib/actions/auth";
 import { getHealthCentersByCity } from "@/lib/actions/queue";
+import { getCityCenter } from "@/lib/constants/locations";
 import { ClinicsNearYou } from "@/components/dashboard/ClinicsNearYou";
 import { MaterialIcon } from "@/components/ui/material-icon";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ export default async function ClientDashboardPage() {
 
   const city = user.city || "Nairobi";
   const centers = await getHealthCentersByCity(city);
+  const defaultMapCenter = user.city ? getCityCenter(user.city) : null;
 
   return (
     <div className="relative flex flex-col overflow-x-hidden">
@@ -68,7 +70,9 @@ export default async function ClientDashboardPage() {
           <ClinicsNearYou
             initialCenters={centers}
             city={city}
+            country={user.country ?? undefined}
             userId={user.userId}
+            defaultMapCenter={defaultMapCenter ?? undefined}
           />
         </section>
       </div>
