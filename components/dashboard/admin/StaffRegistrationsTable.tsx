@@ -18,32 +18,33 @@ interface StaffRegistrationsTableProps {
 }
 
 export function StaffRegistrationsTable({ requests }: StaffRegistrationsTableProps) {
-  const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [list, setList] = useState(requests);
 
   async function handleApprove(id: string) {
     setError(null);
-    setLoadingId(id);
+    setApprovingId(id);
     const result = await approveStaff(id);
     if (result.error) {
       setError(result.error);
     } else {
       setList((prev) => prev.filter((r) => r.id !== id));
     }
-    setLoadingId(null);
+    setApprovingId(null);
   }
 
   async function handleReject(id: string) {
     setError(null);
-    setLoadingId(id);
+    setRejectingId(id);
     const result = await rejectStaff(id);
     if (result.error) {
       setError(result.error);
     } else {
       setList((prev) => prev.filter((r) => r.id !== id));
     }
-    setLoadingId(null);
+    setRejectingId(null);
   }
 
   if (list.length === 0) {
@@ -93,18 +94,18 @@ export function StaffRegistrationsTable({ requests }: StaffRegistrationsTablePro
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled={loadingId === r.id}
+                    disabled={approvingId === r.id || rejectingId === r.id}
                     onClick={() => handleReject(r.id)}
                     className="text-red-600 border-red-200 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950"
                   >
-                    Reject
+                    {rejectingId === r.id ? "Processing…" : "Reject"}
                   </Button>
                   <Button
                     size="sm"
-                    disabled={loadingId === r.id}
+                    disabled={approvingId === r.id || rejectingId === r.id}
                     onClick={() => handleApprove(r.id)}
                   >
-                    {loadingId === r.id ? "Processing…" : "Approve"}
+                    {approvingId === r.id ? "Processing…" : "Approve"}
                   </Button>
                 </div>
               </TableCell>

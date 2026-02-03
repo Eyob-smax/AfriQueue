@@ -44,7 +44,7 @@ export function LocationSelect() {
     <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-100 dark:border-slate-800 overflow-hidden">
       <div className="pt-10 pb-6 px-8 text-center">
         <h1 className="text-[32px] font-bold text-[#0d1b1a] dark:text-white tracking-tight leading-tight pb-3">
-          Welcome to AfriCare
+          Welcome to ArifQueue
         </h1>
         <p className="text-[#4c9a93] dark:text-gray-400 text-base font-normal leading-relaxed max-w-[400px] mx-auto">
           Let&apos;s find the clinics nearest to you. Please select your location

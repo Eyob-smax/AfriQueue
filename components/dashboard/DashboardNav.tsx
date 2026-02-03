@@ -25,7 +25,7 @@ interface DashboardNavProps {
 const clientLinks = [
   { href: "/dashboard/client", label: "Clinics" },
   { href: "/dashboard/client/appointments", label: "My Appointments" },
-  { href: "/dashboard/chat", label: "Messages" },
+  { href: "/dashboard/chat", label: "Chat" },
   { href: "/dashboard/client/history", label: "History" },
 ];
 

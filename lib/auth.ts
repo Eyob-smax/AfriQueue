@@ -84,7 +84,7 @@ export const auth = betterAuth({
         }
         try {
           await client.messages.create({
-            body: `Your Africare verification code is: ${code}`,
+            body: `Your ArifQueue verification code is: ${code}`,
             from,
             to,
           });
@@ -94,7 +94,7 @@ export const auth = betterAuth({
       },
       signUpOnVerification: {
         getTempEmail: (phoneNumber) =>
-          `${phoneNumber.replace(/\D/g, "")}@phone.africare.local`,
+          `${phoneNumber.replace(/\D/g, "")}@phone.arifqueue.local`,
         getTempName: (phoneNumber) => phoneNumber || "User",
       },
     }),

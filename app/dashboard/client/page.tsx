@@ -14,21 +14,13 @@ export default async function ClientDashboardPage() {
   if (!user.city || !user.country) redirect("/onboarding");
 
   const city = user.city;
-  const centers = await getHealthCentersByCity(city);
+  const centers = await getHealthCentersByCity(city, user.country ?? undefined);
   const mapCenter = getCityCenter(user.city);
   const defaultMapCenter = mapCenter ? { lat: mapCenter[0], lng: mapCenter[1] } : undefined;
 
   return (
     <div className="relative flex flex-col overflow-x-hidden">
       <div className="flex-1 max-w-[1200px] mx-auto w-full px-6 py-8">
-        <div className="mb-6 flex items-center justify-between px-4 py-2 bg-[#e7f3f2] dark:bg-[#1a3330] rounded-lg border border-[#cfe7e5] dark:border-[#2d4d4a]">
-          <div className="flex items-center gap-2 text-xs font-medium text-[#4c9a93]">
-            <MaterialIcon icon="wifi_tethering" size={16} />
-            <span>Live data sync active</span>
-          </div>
-          <div className="text-xs text-[#4c9a93]">Last updated: Just now</div>
-        </div>
-
         <section className="mb-12">
           <div className="rounded-xl overflow-hidden bg-white dark:bg-[#1a3330] border border-[#cfe7e5] dark:border-[#2d4d4a] shadow-sm">
             <div className="flex flex-col md:flex-row items-center gap-8 p-8 md:p-12">
@@ -83,7 +75,7 @@ export default async function ClientDashboardPage() {
         <div className="max-w-[1200px] mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="flex items-center gap-2 text-[#4c9a93]">
             <MaterialIcon icon="health_and_safety" size={20} />
-            <span className="text-sm font-bold">AfriCare Health Network © 2024</span>
+            <span className="text-sm font-bold">ArifQueue Health Network © 2024</span>
           </div>
           <div className="flex gap-8">
             <Link

@@ -174,7 +174,7 @@ export default function Home() {
                   healthcare?
                 </h2>
                 <p className="text-white/80 text-lg sm:text-xl font-medium max-w-2xl mx-auto">
-                  Join AfriCare today and skip the wait. Manage your health
+                  Join ArifQueue today and skip the wait. Manage your health
                   visits from your smartphone.
                 </p>
               </div>

@@ -17,7 +17,7 @@ export default async function ChatPage({
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold text-[#0d1b1a] dark:text-white">
-        Messages
+        Chat
       </h1>
       <ChatPageClient
         initialConversations={conversations}

@@ -321,7 +321,7 @@ export function QueueBoard({ userId: _userId, healthCenterId, healthCenterName, 
                           id="edit_status"
                           value={editStatus}
                           onChange={(e) => setEditStatus(e.target.value)}
-                          className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-primary mt-1"
+                          className="flex h-10 w-full rounded-xl border border-input bg-white dark:bg-slate-900 px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-primary mt-1"
                         >
                           <option value="ACTIVE">Active</option>
                           <option value="PAUSED">Paused</option>

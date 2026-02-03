@@ -7,7 +7,7 @@ const ADMIN_SESSION_COOKIE = "admin_session";
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 /** Dev-only fallback so admin sign-in works locally without .env (never used in production). */
-const DEV_SESSION_SECRET = "africare-admin-session-dev-only-min-32-chars";
+const DEV_SESSION_SECRET = "arifqueue-admin-session-dev-only-min-32-chars";
 
 function getSecret(): string {
   return (

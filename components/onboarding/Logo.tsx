@@ -15,7 +15,7 @@ export function Logo({ showText = true, className, href = "/" }: LogoProps) {
       </div>
       {showText && (
         <span className="text-xl font-bold leading-tight tracking-tight text-[#0d1b1a] dark:text-white">
-          AfriCare
+          ArifQueue
         </span>
       )}
     </Link>

@@ -70,7 +70,7 @@ export function StaffSidebar({ healthCenterName }: StaffSidebarProps = {}) {
             }`}
           >
             <MaterialIcon icon="chat" size={22} className={pathname === "/dashboard/chat" ? "fill-primary" : ""} />
-            <p className={`text-sm font-medium ${pathname === "/dashboard/chat" ? "font-bold" : ""}`}>Messages</p>
+            <p className={`text-sm font-medium ${pathname === "/dashboard/chat" ? "font-bold" : ""}`}>Chat</p>
           </Link>
         </nav>
       </div>

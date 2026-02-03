@@ -57,7 +57,7 @@ export function Footer() {
         </div>
         <div className="text-center">
           <p className="text-slate-400 text-sm">
-            © 2024 AfriCare Queue Management Systems. Supporting healthcare across
+            © 2024 ArifQueue Management Systems. Supporting healthcare across
             Africa.
           </p>
         </div>

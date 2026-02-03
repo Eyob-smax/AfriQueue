@@ -112,7 +112,7 @@ export default function RegisterPage() {
                 Create Your Health Profile
               </h1>
               <p className="text-[#4c9a93] dark:text-gray-400 text-base font-normal leading-normal">
-                Join AfriCare Queue for accessible healthcare at your fingertips.
+                Join ArifQueue for accessible healthcare at your fingertips.
               </p>
             </div>
             <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/10 border border-primary/20">
@@ -387,7 +387,7 @@ export default function RegisterPage() {
                         </p>
                         <p className="text-xs text-[#4c9a93]">
                           I understand how my health data will be processed by
-                          AfriCare.
+                          ArifQueue.
                         </p>
                       </div>
                     </label>
@@ -492,7 +492,7 @@ export default function RegisterPage() {
       </div>
 
       <footer className="p-8 text-center text-[10px] text-[#4c9a93] uppercase tracking-[0.2em]">
-        © 2024 AfriCare Healthcare Systems. All Rights Reserved.
+        © 2024 ArifQueue Healthcare Systems. All Rights Reserved.
       </footer>
     </main>
   );

@@ -10,7 +10,7 @@ const lexend = Lexend({
 });
 
 export const metadata: Metadata = {
-  title: "AfriCare — Skip the Queue, Get Care Faster",
+  title: "ArifQueue — Skip the Queue, Get Care Faster",
   description: "Smart healthcare queue management and digital tools for Africa.",
 };
 

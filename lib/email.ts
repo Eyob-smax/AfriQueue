@@ -8,10 +8,10 @@
  *   SMTP_SECURE     - "true" for 465 (default false)
  *   SMTP_USER       - auth username
  *   SMTP_PASS       - auth password
- *   SMTP_FROM       - From address, e.g. "Africare <noreply@yourdomain.com>"
+ *   SMTP_FROM       - From address, e.g. "ArifQueue <noreply@yourdomain.com>"
  */
 
-const FROM = process.env.SMTP_FROM ?? "Africare <noreply@localhost>";
+const FROM = process.env.SMTP_FROM ?? "ArifQueue <noreply@localhost>";
 
 function getTransporter(): import("nodemailer").Transporter | null {
   const host = process.env.SMTP_HOST;

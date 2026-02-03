@@ -271,7 +271,7 @@ export default function LoginPage() {
               </>
             ) : (
               <>
-                New to AfriCare Queue?{" "}
+                New to ArifQueue?{" "}
                 <Link href="/auth/register" className="text-primary font-semibold hover:underline">
                   Create Account
                 </Link>

@@ -32,7 +32,7 @@ export async function syncAuthUserToAppUser(authUser: AuthUserForSync): Promise<
   const role: UserRole = VALID_ROLES.includes(rawRole as UserRole) ? (rawRole as UserRole) : "CLIENT";
   const email =
     authUser.email?.trim() ||
-    (authUser.phoneNumber ? `${authUser.phoneNumber.replace(/\D/g, "")}@phone.africare.local` : null);
+    (authUser.phoneNumber ? `${authUser.phoneNumber.replace(/\D/g, "")}@phone.arifqueue.local` : null);
   if (!email) return;
 
   const fullName =

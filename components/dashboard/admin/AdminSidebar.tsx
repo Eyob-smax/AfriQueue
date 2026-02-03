@@ -74,13 +74,6 @@ export function AdminSidebar() {
             Logout
           </Button>
         </form>
-        <Link
-          href="/auth/login"
-          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-[#4c9a93] hover:bg-background-light dark:hover:bg-background-dark transition-colors"
-        >
-          <MaterialIcon icon="swap_horiz" size={22} />
-          Sign in as other role
-        </Link>
       </div>
     </aside>
   );

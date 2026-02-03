@@ -172,6 +172,7 @@ export const adminProfiles = pgTable("admin_profiles", {
 export const healthCenters = pgTable("health_centers", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
+  country: varchar("country", { length: 100 }),
   city: varchar("city").notNull(),
   address: text("address"),
   latitude: numeric("latitude", { precision: 10, scale: 6 }),

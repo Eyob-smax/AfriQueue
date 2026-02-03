@@ -228,8 +228,12 @@ export async function rejectStaff(requestId: string): Promise<{ error?: string }
 export type HealthCenterRow = {
   id: string;
   name: string;
+  country: string | null;
   city: string;
   address: string | null;
+  description: string | null;
+  latitude: string | null;
+  longitude: string | null;
   status: string | null;
   is_blocked: boolean | null;
 };
@@ -242,8 +246,12 @@ export async function getHealthCentersForAdmin(): Promise<HealthCenterRow[]> {
   return rows.map((r) => ({
     id: r.id,
     name: r.name,
+    country: r.country ?? null,
     city: r.city,
     address: r.address ?? null,
+    description: r.description ?? null,
+    latitude: r.latitude ?? null,
+    longitude: r.longitude ?? null,
     status: r.status ?? null,
     is_blocked: r.is_blocked ?? false,
   }));
@@ -275,6 +283,7 @@ export async function unblockCenter(healthCenterId: string): Promise<{ error?: s
 
 export async function createHealthCenter(formData: {
   name: string;
+  country: string;
   city: string;
   address?: string;
   latitude?: string;
@@ -288,6 +297,7 @@ export async function createHealthCenter(formData: {
     .insert(healthCenters)
     .values({
       name: formData.name.trim(),
+      country: formData.country.trim() || null,
       city: formData.city.trim(),
       address: formData.address?.trim() ?? null,
       latitude: formData.latitude ?? null,
@@ -302,6 +312,62 @@ export async function createHealthCenter(formData: {
     return { id: inserted.id };
   }
   return { error: "Failed to create" };
+}
+
+export async function updateHealthCenterForAdmin(
+  id: string,
+  formData: {
+    name: string;
+    country?: string;
+    city: string;
+    address?: string;
+    latitude?: string;
+    longitude?: string;
+    description?: string;
+  }
+): Promise<{ error?: string }> {
+  const { error, adminId: aid } = await requireAdmin();
+  if (error || !aid) return { error: error ?? "Forbidden" };
+
+  await db
+    .update(healthCenters)
+    .set({
+      name: formData.name.trim(),
+      ...(formData.country !== undefined && { country: formData.country.trim() || null }),
+      city: formData.city.trim(),
+      address: formData.address?.trim() ?? null,
+      latitude: formData.latitude ?? null,
+      longitude: formData.longitude ?? null,
+      description: formData.description?.trim() ?? null,
+    })
+    .where(eq(healthCenters.id, id));
+  await writeAudit(aid, "update_center", "health_center", id, formData.name);
+  return {};
+}
+
+export async function deleteHealthCenterForAdmin(id: string): Promise<{ error?: string }> {
+  const { error, adminId: aid } = await requireAdmin();
+  if (error || !aid) return { error: error ?? "Forbidden" };
+
+  const [staffCount] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(staffProfiles)
+    .where(eq(staffProfiles.health_center_id, id));
+  if (Number(staffCount?.count ?? 0) > 0) {
+    return { error: "Cannot delete: center has staff assigned. Unassign staff or block the center instead." };
+  }
+
+  const [queueCount] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(queues)
+    .where(eq(queues.health_center_id, id));
+  if (Number(queueCount?.count ?? 0) > 0) {
+    return { error: "Cannot delete: center has queues. Remove queues first or block the center instead." };
+  }
+
+  await db.delete(healthCenters).where(eq(healthCenters.id, id));
+  await writeAudit(aid, "delete_center", "health_center", id, null);
+  return {};
 }
 
 export type StaffListItem = {

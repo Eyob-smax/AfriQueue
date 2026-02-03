@@ -305,11 +305,17 @@ export type HealthCenterWithQueues = {
   queues: { id: string; service_type: string | null; queue_date: Date | null; count: number }[];
 };
 
-export async function getHealthCentersByCity(city: string): Promise<HealthCenterWithQueues[]> {
+export async function getHealthCentersByCity(
+  city: string,
+  country?: string | null
+): Promise<HealthCenterWithQueues[]> {
+  const conditions = country
+    ? and(eq(healthCenters.city, city), eq(healthCenters.country, country))
+    : eq(healthCenters.city, city);
   const centers = await db
     .select()
     .from(healthCenters)
-    .where(eq(healthCenters.city, city));
+    .where(conditions);
 
   const result: HealthCenterWithQueues[] = [];
   for (const hc of centers) {
@@ -366,7 +372,7 @@ export async function getNearbyHealthCenters(
   city?: string
 ): Promise<NearbyCenter[]> {
   if (city) {
-    const byCity = await getHealthCentersByCity(city);
+    const byCity = await getHealthCentersByCity(city, undefined);
     if (userLat != null && userLng != null) {
       return byCity
         .map((hc) => {
