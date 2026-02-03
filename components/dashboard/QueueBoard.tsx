@@ -4,18 +4,11 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { advanceQueue, cancelReservation, getQueueState, createQueue, updateQueue, getQueuesByHealthCenter } from "@/lib/actions/queue";
-import type { QueueReservation, QueueState, QueueForStaff } from "@/lib/actions/queue";
+import type { QueueReservation, QueueState, QueueForStaff, StaffClinicInsights } from "@/lib/actions/queue";
 import { getOrCreateDirectConversation } from "@/lib/actions/chat";
 import { Button } from "@/components/ui/button";
 import { MaterialIcon } from "@/components/ui/material-icon";
 import { ClinicInsights } from "@/components/dashboard/ClinicInsights";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -31,16 +24,14 @@ interface QueueBoardProps {
   healthCenterId: string | null;
   healthCenterName: string | null;
   initialQueues: QueueForStaff[];
+  initialClinicInsights?: StaffClinicInsights | null;
 }
 
-type FilterTab = "all" | "emergency" | "medium" | "low";
-
-export function QueueBoard({ userId: _userId, healthCenterId, healthCenterName, initialQueues }: QueueBoardProps) {
+export function QueueBoard({ userId: _userId, healthCenterId, healthCenterName, initialQueues, initialClinicInsights = null }: QueueBoardProps) {
   const router = useRouter();
   const [queueId, setQueueId] = useState<string | null>(null);
   const [queues, setQueues] = useState<QueueForStaff[]>(initialQueues);
   const [queueState, setQueueState] = useState<QueueState | null>(null);
-  const [filterTab, setFilterTab] = useState<FilterTab>("all");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -48,6 +39,12 @@ export function QueueBoard({ userId: _userId, healthCenterId, healthCenterName, 
   const [newServiceType, setNewServiceType] = useState("");
   const [newQueueDate, setNewQueueDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [messageLoadingClientId, setMessageLoadingClientId] = useState<string | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingQueue, setEditingQueue] = useState<QueueForStaff | null>(null);
+  const [editServiceType, setEditServiceType] = useState("");
+  const [editQueueDate, setEditQueueDate] = useState("");
+  const [editStatus, setEditStatus] = useState("ACTIVE");
+  const [editLoading, setEditLoading] = useState(false);
 
   useEffect(() => {
     if (!queueId) return;
@@ -117,6 +114,35 @@ export function QueueBoard({ userId: _userId, healthCenterId, healthCenterName, 
     else if (result.conversationId) router.push(`/dashboard/chat?conversation=${result.conversationId}`);
   }
 
+  function openEditQueue(q: QueueForStaff) {
+    setEditingQueue(q);
+    setEditServiceType(q.service_type ?? "");
+    setEditQueueDate(q.queue_date ? new Date(q.queue_date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10));
+    setEditStatus(q.status ?? "ACTIVE");
+    setEditOpen(true);
+  }
+
+  async function handleSaveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingQueue) return;
+    setEditLoading(true);
+    setError(null);
+    const result = await updateQueue(editingQueue.id, {
+      service_type: editServiceType || undefined,
+      queue_date: new Date(editQueueDate),
+      status: editStatus,
+    });
+    setEditLoading(false);
+    if (result.error) setError(result.error);
+    else {
+      setEditOpen(false);
+      setEditingQueue(null);
+      await refreshQueues();
+      if (queueId === editingQueue.id) getQueueState(editingQueue.id).then(setQueueState);
+      router.refresh();
+    }
+  }
+
   const reservations = queueState?.reservations ?? [];
   const serving = reservations[0];
   const waiting = reservations.slice(1);
@@ -132,8 +158,8 @@ export function QueueBoard({ userId: _userId, healthCenterId, healthCenterName, 
   });
 
   return (
-    <div className="flex-1 overflow-hidden flex flex-col">
-      <header className="h-16 border-b border-[#cfe7e5] dark:border-[#1e3a37] flex items-center justify-between px-8 bg-white dark:bg-[#152a28] shrink-0">
+    <div className="flex-1 overflow-hidden flex flex-col w-full min-w-0">
+      <header className="h-16 border-b border-[#cfe7e5] dark:border-[#1e3a37] flex items-center justify-between px-8 bg-white dark:bg-[#152a28] shrink-0 w-full">
         <div className="flex items-center gap-4 flex-1">
           <div className="relative w-full max-w-md">
             <MaterialIcon
@@ -156,10 +182,6 @@ export function QueueBoard({ userId: _userId, healthCenterId, healthCenterName, 
             <MaterialIcon icon="notifications" size={22} />
             <span className="absolute top-2 right-2 size-2 bg-urgency-emergency rounded-full border-2 border-white dark:border-[#152a28]" />
           </Link>
-          <button className="p-2 text-[#4c9a93] hover:bg-background-light dark:hover:bg-background-dark rounded-lg">
-            <MaterialIcon icon="wifi_tethering" size={22} />
-          </button>
-          <div className="h-8 w-[1px] bg-[#cfe7e5] dark:border-[#1e3a37] mx-2" />
           <div className="flex items-center gap-3">
             <p className="text-sm font-bold hidden sm:block text-[#0d1b1a] dark:text-white">
               {healthCenterName ?? "Staff"}
@@ -169,8 +191,8 @@ export function QueueBoard({ userId: _userId, healthCenterId, healthCenterName, 
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-8 flex gap-8">
-        <div className="flex-1 flex flex-col gap-6 min-w-0">
+      <div className="flex-1 overflow-y-auto p-8 flex gap-8 w-full min-w-0">
+        <div className="flex-1 flex flex-col gap-6 min-w-0 w-full">
           <div className="flex items-end justify-between flex-wrap gap-4">
             <div>
               <h2 className="text-3xl font-black text-[#0d1b1a] dark:text-white leading-none">
@@ -188,7 +210,7 @@ export function QueueBoard({ userId: _userId, healthCenterId, healthCenterName, 
                       Create queue
                     </Button>
                   </DialogTrigger>
-                  <DialogContent>
+                  <DialogContent className="max-w-md w-[calc(100vw-2rem)] sm:w-full">
                     <DialogHeader>
                       <DialogTitle>Create queue</DialogTitle>
                     </DialogHeader>
@@ -215,25 +237,6 @@ export function QueueBoard({ userId: _userId, healthCenterId, healthCenterName, 
             </div>
           </div>
 
-          <div className="border-b border-[#cfe7e5] dark:border-[#1e3a37] flex gap-8">
-            {(["all", "emergency", "medium", "low"] as FilterTab[]).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setFilterTab(tab)}
-                className={`pb-4 border-b-2 font-bold text-sm transition-colors ${
-                  filterTab === tab
-                    ? "border-primary text-[#0d1b1a] dark:text-white"
-                    : "border-transparent text-[#4c9a93]"
-                }`}
-              >
-                {tab === "all" && `All Patients (${reservations.length})`}
-                {tab === "emergency" && "Emergency (2)"}
-                {tab === "medium" && "Medium (4)"}
-                {tab === "low" && "Low (6)"}
-              </button>
-            ))}
-          </div>
-
           {!healthCenterId ? (
             <div className="p-6 bg-white dark:bg-[#152a28] border border-[#cfe7e5] dark:border-[#1e3a37] rounded-xl">
               <p className="text-sm text-[#4c9a93]">No health center assigned. Contact admin to assign your account to a center.</p>
@@ -244,22 +247,109 @@ export function QueueBoard({ userId: _userId, healthCenterId, healthCenterName, 
               {queues.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No queues yet. Create one using the button above.</p>
               ) : (
-                <Select value={queueId || ""} onValueChange={(v) => setQueueId(v || null)}>
-                  <SelectTrigger className="w-full max-w-md rounded-xl h-12">
-                    <SelectValue placeholder="Select queue" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {queues.map((q) => (
-                      <SelectItem key={q.id} value={q.id}>
-                        {q.service_type ?? "Queue"} • {q.queue_date ? new Date(q.queue_date).toLocaleDateString() : ""} ({q.count} waiting)
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <ul className="space-y-2 list-none p-0 m-0">
+                  {queues.map((q) => (
+                    <li
+                      key={q.id}
+                      className="flex items-center justify-between gap-4 py-3 px-4 rounded-xl border border-[#cfe7e5] dark:border-[#1e3a37] bg-background-light dark:bg-[#1a3330] hover:border-primary transition-colors"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-[#0d1b1a] dark:text-white truncate">
+                          {q.service_type ?? "Queue"}
+                        </p>
+                        <p className="text-sm text-[#4c9a93]">
+                          {q.queue_date ? new Date(q.queue_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""}
+                          {q.count !== undefined && ` • ${q.count} waiting`}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="rounded-lg gap-1"
+                          onClick={() => setQueueId(q.id)}
+                        >
+                          <MaterialIcon icon="visibility" size={18} />
+                          Manage
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="rounded-lg gap-1"
+                          onClick={() => openEditQueue(q)}
+                        >
+                          <MaterialIcon icon="edit" size={18} />
+                          Edit
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               )}
+              <Dialog open={editOpen} onOpenChange={(open) => { setEditOpen(open); if (!open) setEditingQueue(null); }}>
+                <DialogContent className="max-w-md w-[calc(100vw-2rem)] sm:w-full">
+                  <DialogHeader>
+                    <DialogTitle>Edit queue</DialogTitle>
+                  </DialogHeader>
+                  {editingQueue && (
+                    <form onSubmit={handleSaveEdit} className="space-y-4">
+                      <div>
+                        <Label htmlFor="edit_service_type">Service type (name)</Label>
+                        <Input
+                          id="edit_service_type"
+                          value={editServiceType}
+                          onChange={(e) => setEditServiceType(e.target.value)}
+                          placeholder="e.g. General"
+                          className="rounded-xl mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="edit_queue_date">Date</Label>
+                        <Input
+                          id="edit_queue_date"
+                          type="date"
+                          value={editQueueDate}
+                          onChange={(e) => setEditQueueDate(e.target.value)}
+                          className="rounded-xl mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="edit_status">Status</Label>
+                        <select
+                          id="edit_status"
+                          value={editStatus}
+                          onChange={(e) => setEditStatus(e.target.value)}
+                          className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-primary mt-1"
+                        >
+                          <option value="ACTIVE">Active</option>
+                          <option value="PAUSED">Paused</option>
+                          <option value="CLOSED">Closed</option>
+                        </select>
+                      </div>
+                      <Button type="submit" disabled={editLoading}>
+                        {editLoading ? "Saving…" : "Save changes"}
+                      </Button>
+                    </form>
+                  )}
+                </DialogContent>
+              </Dialog>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-[#4c9a93] gap-1"
+                  onClick={() => setQueueId(null)}
+                >
+                  <MaterialIcon icon="arrow_back" size={18} />
+                  Change queue
+                </Button>
+              </div>
               {error && (
                 <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
               )}
@@ -322,77 +412,61 @@ export function QueueBoard({ userId: _userId, healthCenterId, healthCenterName, 
                   </div>
                 </div>
               )}
-              {waiting.map((r, idx) => {
-                const priority = idx === 0 ? "emergency" : "medium";
-                return (
-                  <div
-                    key={r.id}
-                    className="bg-white dark:bg-[#152a28] rounded-xl p-4 flex items-center justify-between border border-[#cfe7e5] dark:border-[#1e3a37] hover:border-primary transition-colors"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="size-12 rounded-full flex items-center justify-center bg-background-light dark:bg-background-dark text-[#4c9a93] shrink-0">
-                        <MaterialIcon icon="person" size={32} />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-bold text-lg text-[#0d1b1a] dark:text-white">
-                            {r.client_name ?? `Patient #${r.queue_number}`}
-                          </h4>
-                          <span
-                            className={`text-[10px] font-black px-2 py-0.5 rounded uppercase ${
-                              priority === "emergency"
-                                ? "bg-urgency-emergency/10 text-urgency-emergency"
-                                : "bg-urgency-medium/10 text-urgency-medium"
-                            }`}
-                          >
-                            {priority === "emergency" ? "Emergency" : "Medium"}
-                          </span>
-                        </div>
-                        <p className="text-sm text-[#4c9a93] font-medium">
-                          ID: #{r.queue_number} • Waiting for {8 + idx * 7} mins
-                        </p>
-                      </div>
+              {waiting.map((r, idx) => (
+                <div
+                  key={r.id}
+                  className="bg-white dark:bg-[#152a28] rounded-xl p-4 flex items-center justify-between border border-[#cfe7e5] dark:border-[#1e3a37] hover:border-primary transition-colors"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="size-12 rounded-full flex items-center justify-center bg-background-light dark:bg-background-dark text-[#4c9a93] shrink-0">
+                      <MaterialIcon icon="person" size={32} />
                     </div>
-                    <div className="flex gap-2 flex-wrap">
-                      {r.client_phone && (
-                        <a href={`tel:${r.client_phone.replace(/\s/g, "")}`} className="inline-flex">
-                          <Button variant="outline" size="sm" className="rounded-lg gap-1 text-xs">
-                            <MaterialIcon icon="call" size={16} />
-                            Call
-                          </Button>
-                        </a>
-                      )}
-                      {r.client_email && (
-                        <a href={`mailto:${r.client_email}`} className="inline-flex">
-                          <Button variant="outline" size="sm" className="rounded-lg gap-1 text-xs">
-                            <MaterialIcon icon="mail" size={16} />
-                            Email
-                          </Button>
-                        </a>
-                      )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="rounded-lg gap-1 text-xs"
-                        onClick={() => handleMessageClient(r.client_id)}
-                        disabled={messageLoadingClientId === r.client_id}
-                      >
-                        <MaterialIcon icon="chat" size={16} />
-                        Message
-                      </Button>
-                      {priority === "emergency" && (
-                        <button
-                          onClick={() => handleCancel(r.id)}
-                          disabled={loading}
-                          className="size-10 rounded-lg flex items-center justify-center bg-background-light dark:bg-background-dark text-urgency-emergency/60 border border-[#cfe7e5] dark:border-[#1e3a37]"
-                        >
-                          <MaterialIcon icon="block" size={18} />
-                        </button>
-                      )}
+                    <div>
+                      <h4 className="font-bold text-lg text-[#0d1b1a] dark:text-white">
+                        {r.client_name ?? `Patient #${r.queue_number}`}
+                      </h4>
+                      <p className="text-sm text-[#4c9a93] font-medium">
+                        ID: #{r.queue_number} • Waiting for {8 + idx * 7} mins
+                      </p>
                     </div>
                   </div>
-                );
-              })}
+                  <div className="flex gap-2 flex-wrap">
+                    {r.client_phone && (
+                      <a href={`tel:${r.client_phone.replace(/\s/g, "")}`} className="inline-flex">
+                        <Button variant="outline" size="sm" className="rounded-lg gap-1 text-xs">
+                          <MaterialIcon icon="call" size={16} />
+                          Call
+                        </Button>
+                      </a>
+                    )}
+                    {r.client_email && (
+                      <a href={`mailto:${r.client_email}`} className="inline-flex">
+                        <Button variant="outline" size="sm" className="rounded-lg gap-1 text-xs">
+                          <MaterialIcon icon="mail" size={16} />
+                          Email
+                        </Button>
+                      </a>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-lg gap-1 text-xs"
+                      onClick={() => handleMessageClient(r.client_id)}
+                      disabled={messageLoadingClientId === r.client_id}
+                    >
+                      <MaterialIcon icon="chat" size={16} />
+                      Message
+                    </Button>
+                    <button
+                      onClick={() => handleCancel(r.id)}
+                      disabled={loading}
+                      className="size-10 rounded-lg flex items-center justify-center bg-background-light dark:bg-background-dark text-[#4c9a93] border border-[#cfe7e5] dark:border-[#1e3a37]"
+                    >
+                      <MaterialIcon icon="block" size={18} />
+                    </button>
+                  </div>
+                </div>
+              ))}
               {reservations.length === 0 && queueId && (
                 <p className="text-sm text-[#4c9a93] py-8 text-center">
                   No patients in queue.
@@ -401,7 +475,7 @@ export function QueueBoard({ userId: _userId, healthCenterId, healthCenterName, 
             </div>
           )}
         </div>
-        <ClinicInsights />
+        <ClinicInsights insights={initialClinicInsights} />
       </div>
     </div>
   );

@@ -13,7 +13,7 @@ import {
   conversationParticipants,
   messages,
 } from "./schema";
-import { hashAdminPassword } from "../lib/admin-session";
+import { hashAdminPassword } from "../lib/admin-password";
 
 /** Default password for all seeded demo users (hash stored in DB). */
 const SEED_DEMO_PASSWORD = "Password1!";
@@ -162,7 +162,7 @@ async function seed() {
   }
 
   console.log("Seed complete: health centers, queues, users (5 clients, 2 staff) with hashed password, profiles, reservations, notifications, 1 conversation.");
-  console.log("Demo user password (for Supabase Auth / testing):", SEED_DEMO_PASSWORD);
+  console.log("Demo user password (for testing):", SEED_DEMO_PASSWORD);
 }
 
 seed().catch(console.error);

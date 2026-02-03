@@ -5,8 +5,6 @@
 
 const ADMIN_SESSION_COOKIE = "admin_session";
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-const SCRYPT_KEYLEN = 64;
-const SCRYPT_COST = 16384;
 
 /** Dev-only fallback so admin sign-in works locally without .env (never used in production). */
 const DEV_SESSION_SECRET = "africare-admin-session-dev-only-min-32-chars";
@@ -104,31 +102,3 @@ export async function verifyAdminSessionCookie(
 }
 
 export { ADMIN_SESSION_COOKIE };
-
-/** Hash password with scrypt (Node only). Store result in users.password_hash. */
-export function hashAdminPassword(password: string): string {
-  if (typeof process === "undefined" || !process.versions?.node) {
-    throw new Error("hashAdminPassword is Node-only");
-  }
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const crypto = require("node:crypto") as typeof import("node:crypto");
-  const salt = crypto.randomBytes(16);
-  const key = crypto.scryptSync(password, salt, SCRYPT_KEYLEN, { N: SCRYPT_COST });
-  return `${salt.toString("hex")}:${key.toString("hex")}`;
-}
-
-/** Verify password against stored hash (Node only). */
-export function verifyAdminPassword(password: string, stored: string | null): boolean {
-  if (!stored || !stored.includes(":")) return false;
-  if (typeof process === "undefined" || !process.versions?.node) {
-    throw new Error("verifyAdminPassword is Node-only");
-  }
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const crypto = require("node:crypto") as typeof import("node:crypto");
-  const [saltHex, keyHex] = stored.split(":");
-  if (!saltHex || !keyHex) return false;
-  const salt = Buffer.from(saltHex, "hex");
-  const key = crypto.scryptSync(password, salt, SCRYPT_KEYLEN, { N: SCRYPT_COST });
-  const expected = Buffer.from(keyHex, "hex");
-  return key.length === expected.length && crypto.timingSafeEqual(key, expected);
-}

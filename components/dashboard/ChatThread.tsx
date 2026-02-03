@@ -36,18 +36,18 @@ export function ChatThread({
         s.emit("chat:join", { conversationId });
         s.on("chat:message:sent", (msg: MessageRow & { sender_id?: string }) => {
           if (msg.conversation_id === conversationId) {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: msg.id,
-                conversation_id: msg.conversation_id,
-                sender_id: msg.sender_id ?? "",
-                content: msg.content,
-                content_type: msg.content_type ?? "TEXT",
-                sent_at: msg.sent_at ? new Date(msg.sent_at) : null,
-                sender_name: (msg as { sender_name?: string }).sender_name ?? null,
-              },
-            ]);
+            const newMsg: MessageRow = {
+              id: msg.id,
+              conversation_id: msg.conversation_id,
+              sender_id: msg.sender_id ?? "",
+              content: msg.content,
+              content_type: msg.content_type ?? "TEXT",
+              sent_at: msg.sent_at ? new Date(msg.sent_at) : null,
+              sender_name: (msg as { sender_name?: string }).sender_name ?? null,
+            };
+            setMessages((prev) =>
+              prev.some((m) => m.id === newMsg.id) ? prev : [...prev, newMsg]
+            );
           }
         });
         return () => {
@@ -64,6 +64,9 @@ export function ChatThread({
   async function handleSend() {
     const text = input.trim();
     if (!text || sending) return;
+    // #region agent log
+    fetch("http://127.0.0.1:7245/ingest/76b9be47-6856-4e89-a9e9-f4766eb51cb4",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({location:"ChatThread.tsx:handleSend:entry",message:"handleSend called",data:{conversationId},timestamp:Date.now(),sessionId:"debug-session",hypothesisId:"H3"})}).catch(()=>{});
+    // #endregion
     setError(null);
     setSending(true);
     const result = await sendMessage(conversationId, text);
@@ -71,6 +74,12 @@ export function ChatThread({
       setError(result.error);
     } else {
       setInput("");
+      if (result.message) {
+        const newMsg = result.message;
+        setMessages((prev) =>
+          prev.some((m) => m.id === newMsg.id) ? prev : [...prev, newMsg]
+        );
+      }
     }
     setSending(false);
   }
@@ -79,8 +88,8 @@ export function ChatThread({
 
   return (
     <div className="flex flex-col h-[400px] border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900">
-      <div className="p-3 border-b border-slate-200 dark:border-slate-800">
-        <h3 className="font-semibold text-sm text-[#0d1b1a] dark:text-white">
+      <div className="p-3 border-b border-slate-200 dark:border-slate-800 min-w-0">
+        <h3 className="font-semibold text-sm text-[#0d1b1a] dark:text-white truncate" title={title}>
           {title}
         </h3>
       </div>
@@ -105,18 +114,21 @@ export function ChatThread({
                 </Avatar>
               )}
               <div
-                className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
+                className={`max-w-[80%] min-w-0 rounded-lg px-3 py-2 text-sm ${
                   isMe
                     ? "bg-primary text-primary-foreground"
                     : "bg-slate-100 dark:bg-slate-800 text-[#0d1b1a] dark:text-white"
                 }`}
               >
                 {!isMe && (
-                  <p className="text-xs font-medium text-muted-foreground mb-0.5">
-                    {msg.sender_name ?? "Unknown"}
-                  </p>
+                  <>
+                    <p className="text-xs font-medium text-muted-foreground truncate pb-1.5 border-b border-slate-200 dark:border-slate-600 mb-1.5" title={msg.sender_name ?? undefined}>
+                      {msg.sender_name ?? "Unknown"}
+                    </p>
+                    <p className="break-words">{msg.content}</p>
+                  </>
                 )}
-                <p>{msg.content}</p>
+                {isMe && <p className="break-words">{msg.content}</p>}
               </div>
               {isMe && (
                 <Avatar className="h-8 w-8">

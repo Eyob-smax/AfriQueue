@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { approveStaff, rejectStaff } from "@/lib/actions/admin";
 import type { PendingStaffRequest } from "@/lib/actions/admin";
+import { COUNTRIES } from "@/lib/constants/locations";
 import { Button } from "@/components/ui/button";
 import {
   Table,

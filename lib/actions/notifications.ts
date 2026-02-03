@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { getSessionUser } from "@/lib/auth-session";
 import { db } from "@/drizzle";
 import { notifications } from "@/drizzle/schema";
 import { eq, desc } from "drizzle-orm";
@@ -59,11 +59,8 @@ export async function getNotifications(userId: string): Promise<NotificationRow[
 }
 
 export async function markNotificationRead(id: string): Promise<{ error?: string }> {
-  const supabase = await createClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-  if (!authUser) return { error: "Not authenticated" };
+  const sessionUser = await getSessionUser();
+  if (!sessionUser) return { error: "Not authenticated" };
 
   await db
     .update(notifications)

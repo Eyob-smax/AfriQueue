@@ -1,6 +1,7 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { auth } from "@/lib/auth";
+import { headers } from "next/headers";
 import { db } from "@/drizzle";
 import {
   users,
@@ -18,21 +19,36 @@ import {
   sendStaffRejected,
   sendAccountBlockedOrActivated,
 } from "@/lib/email";
+import { cookies } from "next/headers";
+import {
+  ADMIN_SESSION_COOKIE,
+  verifyAdminSessionCookie,
+} from "@/lib/admin-session";
 
 async function requireAdmin() {
-  const supabase = await createClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-  if (!authUser) return { error: "Not authenticated", adminId: null as string | null };
+  const cookieStore = await cookies();
+  const adminCookie = cookieStore.get(ADMIN_SESSION_COOKIE)?.value;
+  const adminSession = await verifyAdminSessionCookie(adminCookie);
+  if (adminSession) {
+    const [row] = await db
+      .select({ role: users.role })
+      .from(users)
+      .where(eq(users.id, adminSession.userId));
+    if (row && (row.role === "ADMIN" || row.role === "SUPER_ADMIN")) {
+      return { error: null, adminId: adminSession.userId };
+    }
+  }
+
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session?.user) return { error: "Not authenticated", adminId: null as string | null };
   const [row] = await db
     .select({ role: users.role })
     .from(users)
-    .where(eq(users.id, authUser.id));
+    .where(eq(users.id, session.user.id));
   if (!row || (row.role !== "ADMIN" && row.role !== "SUPER_ADMIN")) {
     return { error: "Forbidden", adminId: null as string | null };
   }
-  return { error: null, adminId: authUser.id };
+  return { error: null, adminId: session.user.id };
 }
 
 function writeAudit(adminId: string, action: string, targetType: string, targetId: string | null, details: string | null) {
@@ -350,6 +366,7 @@ export async function setStaffStatus(userId: string, status: "ACTIVE" | "SUSPEND
 export type AdminOverview = {
   healthCentersCount: number;
   staffCount: number;
+  clientsCount: number;
   reservationsCount: number;
   queuesCount: number;
 };
@@ -363,6 +380,10 @@ export async function getAdminOverview(): Promise<AdminOverview | null> {
     .select({ count: sql<number>`count(*)` })
     .from(users)
     .where(and(eq(users.role, "STAFF"), eq(users.status, "ACTIVE")));
+  const [clientsCount] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(users)
+    .where(eq(users.role, "CLIENT"));
   const [resCount] = await db
     .select({ count: sql<number>`count(*)` })
     .from(reservations)
@@ -372,9 +393,84 @@ export async function getAdminOverview(): Promise<AdminOverview | null> {
   return {
     healthCentersCount: Number(hcCount?.count ?? 0),
     staffCount: Number(staffCount?.count ?? 0),
+    clientsCount: Number(clientsCount?.count ?? 0),
     reservationsCount: Number(resCount?.count ?? 0),
     queuesCount: Number(qCount?.count ?? 0),
   };
+}
+
+export type ClientListItem = {
+  user_id: string;
+  full_name: string;
+  email: string;
+  phone: string;
+  status: string | null;
+  country: string | null;
+  city: string | null;
+  created_at: Date | null;
+};
+
+export async function getClientsForAdmin(): Promise<ClientListItem[]> {
+  const { adminId } = await requireAdmin();
+  if (!adminId) return [];
+
+  const rows = await db
+    .select({
+      user_id: users.id,
+      full_name: users.full_name,
+      email: users.email,
+      phone: users.phone,
+      status: users.status,
+      country: users.country,
+      city: users.city,
+      created_at: users.created_at,
+    })
+    .from(users)
+    .where(eq(users.role, "CLIENT"))
+    .orderBy(users.full_name);
+
+  return rows.map((r) => ({
+    user_id: r.user_id,
+    full_name: r.full_name,
+    email: r.email,
+    phone: r.phone,
+    status: r.status ?? null,
+    country: r.country ?? null,
+    city: r.city ?? null,
+    created_at: r.created_at ?? null,
+  }));
+}
+
+export async function setClientStatus(
+  userId: string,
+  status: "ACTIVE" | "SUSPENDED"
+): Promise<{ error?: string }> {
+  const { error, adminId: aid } = await requireAdmin();
+  if (error || !aid) return { error: error ?? "Forbidden" };
+
+  const [target] = await db
+    .select({ role: users.role, email: users.email, full_name: users.full_name })
+    .from(users)
+    .where(eq(users.id, userId));
+  if (!target || target.role !== "CLIENT") {
+    return { error: "User not found or not a client" };
+  }
+
+  await db.update(users).set({ status }).where(eq(users.id, userId));
+  await createNotification(
+    userId,
+    status === "SUSPENDED" ? "ACCOUNT_BLOCKED" : "ACCOUNT_ACTIVATED",
+    userId
+  );
+  if (target.email) {
+    await sendAccountBlockedOrActivated(
+      target.email,
+      target.full_name ?? "User",
+      status === "SUSPENDED" ? "blocked" : "activated"
+    );
+  }
+  await writeAudit(aid, status === "ACTIVE" ? "activate_client" : "deactivate_client", "user", userId, null);
+  return {};
 }
 
 export type QueueSummary = {

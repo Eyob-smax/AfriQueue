@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { signUp } from "@/lib/actions/auth";
-import { createClient } from "@/lib/supabase/client";
+import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Logo } from "@/components/onboarding/Logo";
@@ -42,15 +42,12 @@ export default function RegisterPage() {
     setError(null);
     setGoogleLoading(true);
     try {
-      const supabase = createClient();
-      const { data, error: err } = await supabase.auth.signInWithOAuth({
+      const { data, error: err } = await authClient.signIn.social({
         provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=dashboard`,
-        },
+        callbackURL: "/dashboard",
       });
       if (err) {
-        setError(err.message);
+        setError(err.message ?? "Failed to sign up with Google");
         setGoogleLoading(false);
         return;
       }
@@ -443,7 +440,7 @@ export default function RegisterPage() {
                   </div>
                   <Button
                     type="submit"
-                    disabled={loading}
+                    disabled={loading || !country || !city}
                     className="w-full h-14 bg-primary rounded-xl text-[#0d1b1a] font-bold text-lg shadow-lg shadow-primary/20 hover:scale-[1.01] active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {loading ? "Creating account…" : "Sign Up"}

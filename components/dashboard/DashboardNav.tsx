@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "@/lib/actions/auth";
@@ -30,13 +29,6 @@ const clientLinks = [
   { href: "/dashboard/client/history", label: "History" },
 ];
 
-const LOCATION_OPTIONS = [
-  "Nairobi, Kenya",
-  "Lagos, Nigeria",
-  "Accra, Ghana",
-  "Johannesburg, SA",
-];
-
 const staffLinks = [
   { href: "/dashboard/staff", label: "Live Queue" },
   { href: "/dashboard/staff/insights", label: "Insights" },
@@ -58,34 +50,26 @@ export function DashboardNav({ role, city, country }: DashboardNavProps) {
         ? staffLinks
         : adminLinks;
 
-  const displayLocation = city && country ? `${city}, ${country}` : "Nairobi, Kenya";
-  const [location, setLocation] = useState(displayLocation);
-  const locationValue = LOCATION_OPTIONS.includes(location) ? location : displayLocation;
+  // Static location from registration only — not editable
+  const displayLocation = city && country ? `${city}, ${country}` : null;
 
   return (
     <header className="sticky top-0 z-50 flex items-center justify-between border-b border-[#cfe7e5] dark:border-[#1e3a38] bg-background-light dark:bg-background-dark px-6 md:px-20 py-4">
       <div className="flex items-center gap-8">
         <Logo href="/dashboard" />
-        {role === "CLIENT" && (
+        {role === "CLIENT" && displayLocation && (
           <div className="hidden lg:flex items-center gap-2 min-w-[200px]">
-            <label className="flex flex-col w-full">
-              <div className="flex w-full items-stretch rounded-xl h-10 border border-[#cfe7e5] dark:border-[#2d4d4a] bg-white dark:bg-[#1a3330]">
-                <div className="text-[#4c9a93] flex items-center justify-center pl-3">
-                  <MaterialIcon icon="location_on" size={18} />
-                </div>
-                <select
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  className="flex w-full border-none bg-transparent focus:ring-0 text-sm font-medium py-0 pl-2 pr-8 cursor-pointer text-[#0d1b1a] dark:text-white rounded-xl appearance-none"
-                >
-                  {LOCATION_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                </select>
+            <div
+              className="flex w-full items-center rounded-xl h-10 border border-[#cfe7e5] dark:border-[#2d4d4a] bg-white dark:bg-[#1a3330] pl-3 pr-4"
+              aria-label={`Location: ${displayLocation}`}
+            >
+              <div className="text-[#4c9a93] flex items-center justify-center shrink-0">
+                <MaterialIcon icon="location_on" size={18} />
               </div>
-            </label>
+              <span className="text-sm font-medium pl-2 text-[#0d1b1a] dark:text-white truncate">
+                {displayLocation}
+              </span>
+            </div>
           </div>
         )}
       </div>

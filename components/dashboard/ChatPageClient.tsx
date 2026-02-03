@@ -47,13 +47,15 @@ export function ChatPageClient({
                 <li key={c.id}>
                   <Button
                     variant={selectedId === c.id ? "secondary" : "ghost"}
-                    className="w-full justify-start text-sm"
+                    className="w-full justify-start text-sm min-w-0 overflow-hidden"
                     onClick={() => setSelectedId(c.id)}
                   >
-                    <MaterialIcon icon="chat" size={18} className="mr-2 text-primary" />
-                    {c.participantNames.length > 0
-                      ? c.participantNames.join(", ")
-                      : "Chat"}
+                    <MaterialIcon icon="chat" size={18} className="mr-2 shrink-0 text-primary" />
+                    <span className="truncate">
+                      {c.participantNames.length > 0
+                        ? c.participantNames.join(", ")
+                        : "Chat"}
+                    </span>
                   </Button>
                 </li>
               ))}

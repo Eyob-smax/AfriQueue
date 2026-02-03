@@ -14,6 +14,7 @@ export default async function DashboardLayout({
   const user = await getCurrentUserRole();
   if (!user) redirect("/auth/login");
 
+  // Staff with non-ACTIVE status must stay on pending-approval; middleware must NOT redirect /auth/pending-approval → /dashboard or we get a redirect loop.
   if (user.role === "STAFF" && user.status !== "ACTIVE") {
     redirect("/auth/pending-approval");
   }
@@ -32,7 +33,6 @@ export default async function DashboardLayout({
     const staffCenter = await getStaffHealthCenter();
     return (
       <div className="font-display flex flex-col min-h-screen">
-        {user.needsOnboarding && <div className="shrink-0"><ProfileCompletionBanner /></div>}
         <div className="flex-1 flex min-h-0">
           <StaffLayout healthCenterName={staffCenter?.health_center_name ?? null}>{children}</StaffLayout>
         </div>
@@ -40,9 +40,10 @@ export default async function DashboardLayout({
     );
   }
 
+  // Client dashboard: show complete-profile banner only for CLIENT when onboarding incomplete
   return (
     <div className="min-h-screen flex flex-col bg-background-light dark:bg-background-dark font-display">
-      {user.needsOnboarding && <ProfileCompletionBanner />}
+      {user.role === "CLIENT" && user.needsOnboarding && <ProfileCompletionBanner />}
       <DashboardNav
         userId={user.userId}
         role={user.role}

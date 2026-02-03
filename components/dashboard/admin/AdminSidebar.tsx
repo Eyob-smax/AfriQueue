@@ -3,12 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { MaterialIcon } from "@/components/ui/material-icon";
+import { signOut } from "@/lib/actions/auth";
+import { Button } from "@/components/ui/button";
 
 const navItems = [
   { href: "/dashboard/admin", label: "Overview", icon: "dashboard" },
   { href: "/dashboard/admin/staff-registrations", label: "Staff Registrations", icon: "person_add" },
   { href: "/dashboard/admin/health-centers", label: "Health Centers", icon: "local_hospital" },
   { href: "/dashboard/admin/staff", label: "Staff Accounts", icon: "group" },
+  { href: "/dashboard/admin/clients", label: "Clients", icon: "people" },
   { href: "/dashboard/admin/reports", label: "Reports", icon: "bar_chart" },
   { href: "/dashboard/admin/chat", label: "Chat", icon: "chat" },
   { href: "/dashboard/admin/audit", label: "Audit Log", icon: "history" },
@@ -48,7 +51,7 @@ export function AdminSidebar() {
                 }`}
               >
                 <MaterialIcon
-                  icon={item.icon as "dashboard" | "person_add" | "local_hospital" | "group" | "bar_chart" | "chat" | "history"}
+                  icon={item.icon as "dashboard" | "person_add" | "local_hospital" | "group" | "people" | "bar_chart" | "chat" | "history"}
                   size={22}
                   className={isActive ? "fill-primary" : ""}
                 />
@@ -59,6 +62,25 @@ export function AdminSidebar() {
             );
           })}
         </nav>
+      </div>
+      <div className="flex flex-col gap-2 pt-4 border-t border-[#cfe7e5] dark:border-[#1e3a37]">
+        <form action={signOut} className="w-full">
+          <Button
+            type="submit"
+            variant="outline"
+            className="w-full justify-start gap-3 h-11 rounded-xl border-[#cfe7e5] dark:border-[#1e3a37] text-[#0d1b1a] dark:text-white hover:bg-primary/10 hover:border-primary/30 dark:hover:border-primary/30"
+          >
+            <MaterialIcon icon="logout" size={22} />
+            Logout
+          </Button>
+        </form>
+        <Link
+          href="/auth/login"
+          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-[#4c9a93] hover:bg-background-light dark:hover:bg-background-dark transition-colors"
+        >
+          <MaterialIcon icon="swap_horiz" size={22} />
+          Sign in as other role
+        </Link>
       </div>
     </aside>
   );

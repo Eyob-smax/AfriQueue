@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { authClient } from "@/lib/auth-client";
 import { syncUserAfterPhoneAuth } from "@/lib/actions/auth";
 import { updateUserLocation } from "@/lib/actions/location";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,6 @@ import {
 
 interface PhoneAuthFormProps {
   mode?: "login" | "signup";
-  /** E.164 country code without + (e.g. "251" for Ethiopia). When set, phone input is locked to this prefix. */
   countryCode?: string;
   countryLabel?: string;
   cityLabel?: string;
@@ -35,7 +34,6 @@ export function PhoneAuthForm({
   const [step, setStep] = useState<"phone" | "verify">("phone");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Login: user selects country so we enforce prefix. Signup: parent passes countryCode.
   const [loginCountry, setLoginCountry] = useState("");
 
   const countryCode = propCountryCode ?? (loginCountry ? getCountryPhoneCode(loginCountry) : "");
@@ -46,7 +44,6 @@ export function PhoneAuthForm({
     const digits = value.replace(/\D/g, "");
     if (digits.length === 0) return "";
     if (isEnforced) {
-      // Already have country code in digits or user typed national number
       if (digits.startsWith(countryCode)) return `+${digits}`;
       if (digits.startsWith("0")) return `+${countryCode}${digits.slice(1)}`;
       return `+${countryCode}${digits}`;
@@ -60,7 +57,7 @@ export function PhoneAuthForm({
     if (!formatted) return "";
     if (isEnforced && formatted.startsWith(prefix)) {
       const national = formatted.slice(prefix.length).replace(/\D/g, "");
-      return national; // show only national part in input when prefix is fixed
+      return national;
     }
     return formatted;
   }
@@ -68,7 +65,6 @@ export function PhoneAuthForm({
   function handlePhoneChange(raw: string) {
     const digits = raw.replace(/\D/g, "");
     if (isEnforced) {
-      // Store only national number (no leading 0)
       const national = digits.startsWith(countryCode)
         ? digits.slice(countryCode.length)
         : digits.startsWith("0")
@@ -105,12 +101,11 @@ export function PhoneAuthForm({
       return;
     }
     try {
-      const supabase = createClient();
-      const { error: err } = await supabase.auth.signInWithOtp({
-        phone: formatted,
+      const { error: err } = await authClient.phoneNumber.sendOtp({
+        phoneNumber: formatted,
       });
       if (err) {
-        setError(err.message);
+        setError(err.message ?? "Failed to send code");
         setLoading(false);
         return;
       }
@@ -134,18 +129,16 @@ export function PhoneAuthForm({
       return;
     }
     try {
-      const supabase = createClient();
-      const { data, error: err } = await supabase.auth.verifyOtp({
-        phone: formatted,
-        token,
-        type: "sms",
+      const { data, error: err } = await authClient.phoneNumber.verify({
+        phoneNumber: formatted,
+        code: token,
       });
       if (err) {
-        setError(err.message);
+        setError(err.message ?? "Verification failed");
         setLoading(false);
         return;
       }
-      if (data?.session) {
+      if (data) {
         await syncUserAfterPhoneAuth();
         if (mode === "signup" && countryLabel && cityLabel) {
           await updateUserLocation(countryLabel, cityLabel);

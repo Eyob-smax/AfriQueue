@@ -112,7 +112,7 @@ export function StaffHealthCenterSettingsForm({
         <Textarea
           id="description"
           name="description"
-          className="rounded-xl min-h-[80px]"
+          className="rounded-xl min-h-[80px] resize-none"
           defaultValue={center.description ?? ""}
           placeholder="Brief description of the center"
         />
@@ -122,7 +122,7 @@ export function StaffHealthCenterSettingsForm({
         <Textarea
           id="services"
           name="services"
-          className="rounded-xl min-h-[60px]"
+          className="rounded-xl min-h-[60px] resize-none"
           defaultValue={center.services ?? ""}
           placeholder="Comma-separated or one per line"
         />

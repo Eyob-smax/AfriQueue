@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { getCurrentUserRole } from "@/lib/actions/auth";
-import { createClient } from "@/lib/supabase/server";
 import { db } from "@/drizzle";
 import { users } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
@@ -12,16 +11,10 @@ export default async function ProfilePage() {
   const user = await getCurrentUserRole();
   if (!user) redirect("/auth/login");
 
-  const supabase = await createClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-  if (!authUser) redirect("/auth/login");
-
   const [row] = await db
     .select()
     .from(users)
-    .where(eq(users.id, authUser.id));
+    .where(eq(users.id, user.userId));
 
   if (!row) redirect("/auth/login");
 

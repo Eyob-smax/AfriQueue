@@ -1,10 +1,9 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "http";
 import { Server } from "socket.io";
-import { createClient } from "@supabase/supabase-js";
+import { jwtVerify, createRemoteJWKSet } from "jose";
 
 const PORT = process.env.SOCKET_PORT || 3001;
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 const EMIT_SECRET = process.env.SOCKET_EMIT_SECRET || "internal-secret";
 
 function handleEmitRequest(req: IncomingMessage, res: ServerResponse) {
@@ -41,12 +40,12 @@ const httpServer = createServer((req, res) => {
 
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+    origin: APP_URL,
     methods: ["GET", "POST"],
   },
 });
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const JWKS_URL = `${APP_URL}/api/auth/jwks`;
 
 interface AuthenticatedSocket {
   userId: string;
@@ -58,16 +57,20 @@ io.use(async (socket, next) => {
   if (!token) {
     return next(new Error("Authentication required"));
   }
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser(token);
-  if (error || !user) {
+  try {
+    const JWKS = createRemoteJWKSet(new URL(JWKS_URL));
+    const { payload } = await jwtVerify(token, JWKS, {
+      issuer: APP_URL,
+      audience: APP_URL,
+    });
+    const userId = (payload.sub ?? (payload as { id?: string }).id) as string;
+    if (!userId) return next(new Error("Invalid token"));
+    (socket as unknown as AuthenticatedSocket).userId = userId;
+    (socket as unknown as AuthenticatedSocket).role = (payload as { role?: string }).role;
+    return next();
+  } catch {
     return next(new Error("Invalid token"));
   }
-  (socket as unknown as AuthenticatedSocket).userId = user.id;
-  (socket as unknown as AuthenticatedSocket).role = user.user_metadata?.role;
-  return next();
 });
 
 io.on("connection", (socket) => {

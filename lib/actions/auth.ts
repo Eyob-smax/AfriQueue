@@ -1,23 +1,24 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { auth } from "@/lib/auth";
+import { headers } from "next/headers";
 import { db } from "@/drizzle";
-import { users, clientProfiles, roleRequests } from "@/drizzle/schema";
+import { users, roleRequests, clientProfiles } from "@/drizzle/schema";
 import { createNotification } from "@/lib/actions/notifications";
 import {
   createSignedAdminSession,
   ADMIN_SESSION_COOKIE,
-  verifyAdminPassword,
 } from "@/lib/admin-session";
+import { verifyAdminPassword } from "@/lib/admin-password";
 import { cookies } from "next/headers";
-
-type UserRole = "CLIENT" | "STAFF" | "ADMIN" | "SUPER_ADMIN";
+import { syncAuthUserToAppUser } from "@/lib/sync-app-user";
 import { eq, inArray } from "drizzle-orm";
 import { redirect } from "next/navigation";
 
+type UserRole = "CLIENT" | "STAFF" | "ADMIN" | "SUPER_ADMIN";
+
 export type AuthResult = { error?: string };
 
-/** Admin login: DB-only check against public.users (no Supabase Auth API). */
 export async function signInAdmin(formData: FormData): Promise<AuthResult> {
   const email = (formData.get("email") as string)?.trim();
   const password = formData.get("password") as string;
@@ -54,81 +55,103 @@ export async function signInAdmin(formData: FormData): Promise<AuthResult> {
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    maxAge: 7 * 24 * 60 * 60, // 7 days
+    maxAge: 7 * 24 * 60 * 60,
   });
   redirect("/dashboard");
 }
 
 export async function signIn(formData: FormData): Promise<AuthResult> {
-  const supabase = await createClient();
-  const email = formData.get("email") as string;
+  const email = (formData.get("email") as string)?.trim();
   const password = formData.get("password") as string;
   if (!email || !password) {
     return { error: "Email and password are required" };
   }
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) return { error: error.message };
-  await syncUserToApp(supabase);
-  const [row] = await db
-    .select({ role: users.role, status: users.status })
-    .from(users)
-    .where(eq(users.email, email));
-  if (row?.role === "STAFF" && row?.status !== "ACTIVE") {
-    redirect("/auth/pending-approval");
+  try {
+    const res = await auth.api.signInEmail({
+      body: { email, password },
+      headers: await headers(),
+    });
+    const signInRes = res as { error?: { message?: string } };
+    if (signInRes?.error) return { error: signInRes.error.message ?? "Invalid email or password" };
+    const session = await auth.api.getSession({ headers: await headers() });
+    if (session?.user) {
+      await syncAuthUserToAppUser({
+        id: session.user.id,
+        name: session.user.name,
+        email: session.user.email,
+        phoneNumber: (session.user as { phoneNumber?: string }).phoneNumber,
+        image: session.user.image,
+        role: (session.user as { role?: string }).role,
+      });
+    }
+    const [row] = await db
+      .select({ role: users.role, status: users.status })
+      .from(users)
+      .where(eq(users.email, email));
+    if (row?.role === "STAFF" && row?.status !== "ACTIVE") {
+      redirect("/auth/pending-approval");
+    }
+    redirect("/dashboard");
+  } catch (err) {
+    const digest = (err as { digest?: string })?.digest;
+    if (typeof digest === "string" && digest.startsWith("NEXT_REDIRECT")) throw err;
+    const msg = err instanceof Error ? err.message : String(err);
+    const isAuthError = /invalid email or password|unauthorized|user not found|invalid credentials/i.test(msg);
+    return { error: isAuthError ? "Invalid email or password" : msg || "Invalid email or password" };
   }
-  redirect("/dashboard");
 }
 
 export async function signUp(formData: FormData): Promise<AuthResult> {
-  const supabase = await createClient();
-  const email = formData.get("email") as string;
+  const email = (formData.get("email") as string)?.trim();
   const password = formData.get("password") as string;
-  const fullName = (formData.get("fullName") as string) || email?.split("@")[0] || "User";
-  const phone = (formData.get("phone") as string) || "";
-  const country = (formData.get("country") as string) || "";
-  const city = (formData.get("city") as string) || "";
+  const fullName =
+    (formData.get("fullName") as string) || email?.split("@")[0] || "User";
+  const country = (formData.get("country") as string)?.trim();
+  const city = (formData.get("city") as string)?.trim();
+
   if (!email || !password) {
     return { error: "Email and password are required" };
   }
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: { full_name: fullName, phone, role: "CLIENT", country, city },
-    },
-  });
-  if (error) return { error: error.message };
+  if (!country || !city) {
+    return { error: "Country and city are required" };
+  }
   try {
-    // Use user from signUp response so we don't rely on session cookie in same request
-    if (data?.user) {
-      await syncUserToAppWithUser(data.user);
-    } else {
-      await syncUserToApp(supabase);
+    const res = await auth.api.signUpEmail({
+      body: { email, password, name: fullName, role: "CLIENT" },
+      headers: await headers(),
+    });
+    const signUpErr = (res as { error?: { message?: string } })?.error;
+    if (signUpErr) return { error: signUpErr.message };
+    const userId = (res as { user?: { id: string } })?.user?.id;
+    if (userId) {
+      const countryVal = country.length > 100 ? country.slice(0, 100) : country;
+      const cityVal = city.length > 100 ? city.slice(0, 100) : city;
+      await db
+        .update(users)
+        .set({ country: countryVal, city: cityVal })
+        .where(eq(users.id, userId));
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    const stack = err instanceof Error ? err.stack : undefined;
-    try {
-      const fs = await import("node:fs");
-      const path = await import("node:path");
-      const logPath = path.join(process.cwd(), ".cursor", "debug.log");
-      fs.mkdirSync(path.dirname(logPath), { recursive: true });
-      fs.appendFileSync(
-        logPath,
-        `${new Date().toISOString()} signUp/syncUserToApp error: ${message}\n${stack ?? ""}\n\n`
-      );
-    } catch (_) {}
+    const isLengthOrTypeError =
+      /value too long|character varying|varchar|exceeds maximum|truncat/i.test(message);
+    const hint =
+      process.env.NODE_ENV === "development" && isLengthOrTypeError
+        ? " Run database migrations (npm run db:migrate) and try again."
+        : "";
     return {
-      error: process.env.NODE_ENV === "development"
-        ? `Database error saving new user: ${message}`
-        : "Database error saving new user. Please try again or contact support.",
+      error:
+        process.env.NODE_ENV === "development"
+          ? `Database error saving new user: ${message}${hint}`
+          : isLengthOrTypeError
+            ? "Database setup is incomplete. Please contact support or try again later."
+            : "Database error saving new user. Please try again or contact support.",
     };
   }
   redirect("/auth/login?confirm_email=1");
 }
 
 export async function signUpStaff(formData: FormData): Promise<AuthResult> {
-  const supabase = await createClient();
   const email = (formData.get("email") as string)?.trim();
   const password = formData.get("password") as string;
   const fullName = (formData.get("fullName") as string)?.trim() || "Staff";
@@ -140,51 +163,25 @@ export async function signUpStaff(formData: FormData): Promise<AuthResult> {
   if (!email || !password) {
     return { error: "Email and password are required" };
   }
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: {
-        full_name: fullName,
-        phone,
-        role: "STAFF",
-        health_center_name: healthCenterName,
-        health_center_description: healthCenterDescription,
-        health_center_location: healthCenterLocation,
-        health_center_country: healthCenterCountry || undefined,
-      },
-    },
+  const res = await auth.api.signUpEmail({
+    body: { email, password, name: fullName, role: "STAFF" },
+    headers: await headers(),
   });
-  if (error) return { error: error.message };
-  const authUser = data.user;
-  if (!authUser?.id) {
+  if ((res as { error?: { message: string } })?.error)
+    return { error: (res as { error?: { message: string } }).error?.message };
+  const userId = (res as { user?: { id: string } })?.user?.id;
+  if (!userId) {
     return { error: "Account created but could not complete registration. Please contact support." };
   }
   try {
     await db
-      .insert(users)
-      .values({
-        id: authUser.id,
-        full_name: fullName,
-        email,
-        phone: phone || "—",
-        role: "STAFF",
-        status: "PENDING_APPROVAL",
-      })
-      .onConflictDoUpdate({
-        target: users.id,
-        set: {
-          full_name: fullName,
-          email,
-          phone: phone || "—",
-          role: "STAFF",
-          status: "PENDING_APPROVAL",
-        },
-      });
+      .update(users)
+      .set({ status: "PENDING_APPROVAL", phone: phone || "—" })
+      .where(eq(users.id, userId));
     const [inserted] = await db
       .insert(roleRequests)
       .values({
-        requester_id: authUser.id,
+        requester_id: userId,
         requested_role: "STAFF",
         status: "PENDING",
         health_center_name: healthCenterName || null,
@@ -232,81 +229,35 @@ export async function signUpStaff(formData: FormData): Promise<AuthResult> {
   redirect("/auth/pending-approval");
 }
 
-export async function signOut() {
+export async function signOut(): Promise<never> {
   const cookieStore = await cookies();
   cookieStore.delete(ADMIN_SESSION_COOKIE);
-  const supabase = await createClient();
-  await supabase.auth.signOut();
+  await auth.api.signOut({ headers: await headers() });
   redirect("/auth/login");
 }
 
 export async function syncUserAfterPhoneAuth() {
-  const supabase = await createClient();
-  await syncUserToApp(supabase);
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session?.user) return;
+  await syncAuthUserToAppUser({
+    id: session.user.id,
+    name: session.user.name,
+    email: session.user.email,
+    phoneNumber: (session.user as { phoneNumber?: string }).phoneNumber,
+    image: session.user.image,
+    role: (session.user as { role?: string }).role,
+  });
 }
 
-type AuthUser = { id: string; email?: string | null; phone?: string | null; user_metadata?: Record<string, unknown> };
-
-async function syncUserFromAuthUser(authUser: AuthUser): Promise<void> {
-  const metadata = authUser.user_metadata || {};
-  const fullName =
-    (metadata.full_name as string) ||
-    (metadata.name as string) ||
-    (metadata.given_name as string) ||
-    authUser.email?.split("@")[0] ||
-    authUser.phone ||
-    "User";
-  const phone = (metadata.phone as string) || authUser.phone || "";
-  const role = ((metadata.role as UserRole) || "CLIENT") as UserRole;
-  const email =
-    authUser.email ?? (authUser.phone ? `${authUser.phone}@phone.africare.local` : null);
-  const country = (metadata.country as string) ?? null;
-  const city = (metadata.city as string) ?? null;
-  if (!email) return;
-
-  await db
-    .insert(users)
-    .values({
-      id: authUser.id,
-      full_name: fullName,
-      email,
-      phone: phone || authUser.phone || "—",
-      role,
-      status: "ACTIVE",
-      country: country || undefined,
-      city: city || undefined,
-    })
-    .onConflictDoUpdate({
-      target: users.id,
-      set: {
-        full_name: fullName,
-        email,
-        phone: phone || authUser.phone || "—",
-        role,
-        ...(country != null && country !== "" && { country }),
-        ...(city != null && city !== "" && { city }),
-      },
-    });
-
-  if (role === "CLIENT") {
-    await db
-      .insert(clientProfiles)
-      .values({ user_id: authUser.id })
-      .onConflictDoNothing({ target: clientProfiles.user_id });
-  }
-}
-
-/** Sync a single auth user (e.g. from signUp response) to public.users. */
-export async function syncUserToAppWithUser(authUser: AuthUser): Promise<void> {
-  await syncUserFromAuthUser(authUser);
-}
-
-export async function syncUserToApp(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-  if (!authUser) return;
-  await syncUserFromAuthUser(authUser as AuthUser);
+/** Sync a single auth user to public.users (e.g. after OAuth or phone verify). */
+export async function syncUserToAppWithUser(authUser: {
+  id: string;
+  name?: string | null;
+  email?: string | null;
+  phoneNumber?: string | null;
+  role?: string | null;
+}): Promise<void> {
+  await syncAuthUserToAppUser(authUser);
 }
 
 export async function getCurrentUserRole(): Promise<{
@@ -317,9 +268,9 @@ export async function getCurrentUserRole(): Promise<{
   city: string | null;
   country: string | null;
 } | null> {
-  const { verifyAdminSessionCookie } = await import("@/lib/admin-session");
   const cookieStore = await cookies();
   const adminCookie = cookieStore.get(ADMIN_SESSION_COOKIE)?.value;
+  const { verifyAdminSessionCookie } = await import("@/lib/admin-session");
   const adminSession = await verifyAdminSessionCookie(adminCookie);
   if (adminSession) {
     const [row] = await db
@@ -342,28 +293,55 @@ export async function getCurrentUserRole(): Promise<{
     };
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-  if (!authUser) return null;
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session?.user) return null;
 
-  await syncUserToApp(supabase);
+  await syncAuthUserToAppUser({
+    id: session.user.id,
+    name: session.user.name,
+    email: session.user.email,
+    phoneNumber: (session.user as { phoneNumber?: string }).phoneNumber,
+    image: session.user.image,
+    role: (session.user as { role?: string }).role,
+  });
 
   const [row] = await db
     .select({ role: users.role, status: users.status, country: users.country, city: users.city })
     .from(users)
-    .where(eq(users.id, authUser.id));
+    .where(eq(users.id, session.user.id));
 
   if (!row) return null;
 
-  const needsOnboarding = !row.country || !row.city;
-  const status = row.status ?? "ACTIVE";
+  let hasCompletedHealthProfile = true;
+  if (row.role === "CLIENT") {
+    const [profile] = await db
+      .select({
+        health_condition: clientProfiles.health_condition,
+        health_history: clientProfiles.health_history,
+        chronic_illnesses: clientProfiles.chronic_illnesses,
+        blood_type: clientProfiles.blood_type,
+        emergency_contact: clientProfiles.emergency_contact,
+        any_disabilities: clientProfiles.any_disabilities,
+      })
+      .from(clientProfiles)
+      .where(eq(clientProfiles.user_id, session.user.id));
+    hasCompletedHealthProfile =
+      !!profile &&
+      (profile.health_condition != null ||
+        profile.health_history != null ||
+        profile.chronic_illnesses != null ||
+        profile.blood_type != null ||
+        profile.emergency_contact != null ||
+        profile.any_disabilities === true);
+  }
+
+  const needsOnboarding =
+    !row.country || !row.city || (row.role === "CLIENT" && !hasCompletedHealthProfile);
 
   return {
-    userId: authUser.id,
+    userId: session.user.id,
     role: row.role as UserRole,
-    status,
+    status: row.status ?? "ACTIVE",
     needsOnboarding,
     city: row.city ?? null,
     country: row.country ?? null,

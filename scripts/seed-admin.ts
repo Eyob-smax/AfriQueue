@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "../drizzle";
 import { users, adminProfiles } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
-import { hashAdminPassword } from "../lib/admin-session";
+import { hashAdminPassword } from "../lib/admin-password";
 
 const ADMIN_EMAIL = "eyobsmax@gmail.com";
 const ADMIN_PHONE = "+251980263141";
@@ -13,7 +13,7 @@ const ADMIN_FULL_NAME = "Admin";
 const DEFAULT_ADMIN_PASSWORD = "Admin1!";
 
 /**
- * Bootstrap admin in public.users only (no Supabase Auth API).
+ * Bootstrap admin in public.users only.
  * Admin login uses DB-only check and admin_session cookie.
  */
 async function bootstrapAdmin() {
@@ -54,7 +54,7 @@ async function bootstrapAdmin() {
     region: "EAST_AFRICA",
   });
 
-  console.log("Admin user created successfully (public.users only, no Supabase Auth).");
+  console.log("Admin user created successfully (public.users).");
   console.log("Email:", ADMIN_EMAIL);
   if (usedDefault) {
     console.log("Password (default):", DEFAULT_ADMIN_PASSWORD, "- change after first login.");

@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { getSessionUser } from "@/lib/auth-session";
 import { db } from "@/drizzle";
 import {
   users,
@@ -16,11 +16,8 @@ export async function createConversation(
   participantIds: string[],
   type: "DIRECT" | "SUPPORT" | "GROUP"
 ): Promise<{ error?: string; conversationId?: string }> {
-  const supabase = await createClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-  if (!authUser) return { error: "Not authenticated" };
+  const sessionUser = await getSessionUser();
+  if (!sessionUser) return { error: "Not authenticated" };
 
   const [conv] = await db
     .insert(conversations)
@@ -29,7 +26,7 @@ export async function createConversation(
 
   if (!conv) return { error: "Failed to create conversation" };
 
-  const allIds = [...new Set([authUser.id, ...participantIds])];
+  const allIds = [...new Set([sessionUser.id, ...participantIds])];
   await db.insert(conversationParticipants).values(
     allIds.map((user_id) => ({
       conversation_id: conv.id,
@@ -43,16 +40,13 @@ export async function createConversation(
 export async function getConversations(): Promise<
   { id: string; type: string; participantNames: string[] }[]
 > {
-  const supabase = await createClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-  if (!authUser) return [];
+  const sessionUser = await getSessionUser();
+  if (!sessionUser) return [];
 
   const participants = await db
     .select({ conversation_id: conversationParticipants.conversation_id })
     .from(conversationParticipants)
-    .where(eq(conversationParticipants.user_id, authUser.id));
+    .where(eq(conversationParticipants.user_id, sessionUser.id));
 
   const convIds = participants.map((p) => p.conversation_id);
   if (convIds.length === 0) return [];
@@ -72,7 +66,7 @@ export async function getConversations(): Promise<
       .leftJoin(users, eq(conversationParticipants.user_id, users.id))
       .where(eq(conversationParticipants.conversation_id, c.id));
     const names = parts
-      .filter((p) => p.user_id !== authUser.id)
+      .filter((p) => p.user_id !== sessionUser.id)
       .map((p) => p.full_name ?? "Unknown");
     result.push({
       id: c.id,
@@ -95,11 +89,8 @@ export type MessageRow = {
 };
 
 export async function getMessages(conversationId: string): Promise<MessageRow[]> {
-  const supabase = await createClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-  if (!authUser) return [];
+  const sessionUser = await getSessionUser();
+  if (!sessionUser) return [];
 
   const rows = await db
     .select({
@@ -133,18 +124,15 @@ export async function getMessages(conversationId: string): Promise<MessageRow[]>
 export async function sendMessage(
   conversationId: string,
   content: string
-): Promise<{ error?: string; messageId?: string }> {
-  const supabase = await createClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-  if (!authUser) return { error: "Not authenticated" };
+): Promise<{ error?: string; messageId?: string; message?: MessageRow }> {
+  const sessionUser = await getSessionUser();
+  if (!sessionUser) return { error: "Not authenticated" };
 
   const [msg] = await db
     .insert(messages)
     .values({
       conversation_id: conversationId,
-      sender_id: authUser.id,
+      sender_id: sessionUser.id,
       content,
       content_type: "TEXT",
     })
@@ -164,11 +152,16 @@ export async function sendMessage(
     .from(conversationParticipants)
     .where(eq(conversationParticipants.conversation_id, conversationId));
   for (const p of participants) {
-    if (p.user_id !== authUser.id) {
+    if (p.user_id !== sessionUser.id) {
       await createNotification(p.user_id, "CHAT_MESSAGE", msg.id);
     }
   }
 
+  const [senderRow] = await db
+    .select({ full_name: users.full_name })
+    .from(users)
+    .where(eq(users.id, sessionUser.id));
+  const senderName = senderRow?.full_name ?? "You";
   const payload = {
     id: msg.id,
     conversation_id: msg.conversation_id,
@@ -176,29 +169,35 @@ export async function sendMessage(
     content: msg.content,
     content_type: msg.content_type,
     sent_at: msg.sent_at,
-    sender_name: authUser.user_metadata?.full_name ?? authUser.email ?? "You",
+    sender_name: senderName,
   };
 
   await emitToRoom(`conversation:${conversationId}`, "chat:message:sent", payload);
 
-  return { messageId: msg.id };
+  const message: MessageRow = {
+    id: msg.id,
+    conversation_id: msg.conversation_id ?? conversationId,
+    sender_id: msg.sender_id ?? sessionUser.id,
+    content: msg.content,
+    content_type: msg.content_type ?? "TEXT",
+    sent_at: msg.sent_at,
+    sender_name: senderName,
+  };
+  return { messageId: msg.id, message };
 }
 
 /** Get or create a DIRECT conversation between current user and another user. */
 export async function getOrCreateDirectConversation(
   otherUserId: string
 ): Promise<{ error?: string; conversationId?: string }> {
-  const supabase = await createClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-  if (!authUser) return { error: "Not authenticated" };
-  if (otherUserId === authUser.id) return { error: "Cannot chat with yourself" };
+  const sessionUser = await getSessionUser();
+  if (!sessionUser) return { error: "Not authenticated" };
+  if (otherUserId === sessionUser.id) return { error: "Cannot chat with yourself" };
 
   const myParticipations = await db
     .select({ conversation_id: conversationParticipants.conversation_id })
     .from(conversationParticipants)
-    .where(eq(conversationParticipants.user_id, authUser.id));
+    .where(eq(conversationParticipants.user_id, sessionUser.id));
   const convIds = myParticipations.map((p) => p.conversation_id);
   if (convIds.length === 0) return createConversation([otherUserId], "DIRECT");
 
@@ -219,7 +218,7 @@ export async function getOrCreateDirectConversation(
       .from(conversationParticipants)
       .where(eq(conversationParticipants.conversation_id, c.id));
     const ids = new Set(participants.map((p) => p.user_id));
-    if (ids.has(authUser.id) && ids.has(otherUserId) && ids.size === 2) {
+    if (ids.has(sessionUser.id) && ids.has(otherUserId) && ids.size === 2) {
       return { conversationId: c.id };
     }
   }
@@ -232,11 +231,8 @@ export async function getOrCreateSupportConversation(): Promise<{
   error?: string;
   conversationId?: string;
 }> {
-  const supabase = await createClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-  if (!authUser) return { error: "Not authenticated" };
+  const sessionUser = await getSessionUser();
+  if (!sessionUser) return { error: "Not authenticated" };
 
   const adminUsers = await db
     .select({ id: users.id })
@@ -249,7 +245,7 @@ export async function getOrCreateSupportConversation(): Promise<{
   const myParticipations = await db
     .select({ conversation_id: conversationParticipants.conversation_id })
     .from(conversationParticipants)
-    .where(eq(conversationParticipants.user_id, authUser.id));
+    .where(eq(conversationParticipants.user_id, sessionUser.id));
   const convIds = myParticipations.map((p) => p.conversation_id);
   if (convIds.length > 0) {
     const supportConvs = await db
@@ -268,7 +264,7 @@ export async function getOrCreateSupportConversation(): Promise<{
         .from(conversationParticipants)
         .where(eq(conversationParticipants.conversation_id, c.id));
       const ids = new Set(participants.map((p) => p.user_id));
-      if (ids.has(authUser.id) && ids.has(adminId)) {
+      if (ids.has(sessionUser.id) && ids.has(adminId)) {
         return { conversationId: c.id };
       }
     }

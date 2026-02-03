@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { getSessionUser } from "@/lib/auth-session";
 import { db } from "@/drizzle";
 import { healthCenters, staffProfiles, queues, reservations } from "@/drizzle/schema";
 import { eq, and, inArray, sql } from "drizzle-orm";
@@ -21,13 +21,12 @@ export type HealthCenterForStaff = {
 };
 
 export async function getHealthCenterForStaff(): Promise<HealthCenterForStaff | null> {
-  const supabase = await createClient();
-  const { data: { user: authUser } } = await supabase.auth.getUser();
-  if (!authUser) return null;
+  const sessionUser = await getSessionUser();
+  if (!sessionUser) return null;
   const [staff] = await db
     .select({ health_center_id: staffProfiles.health_center_id })
     .from(staffProfiles)
-    .where(eq(staffProfiles.user_id, authUser.id));
+    .where(eq(staffProfiles.user_id, sessionUser.id));
   if (!staff?.health_center_id) return null;
   const [hc] = await db
     .select()
@@ -62,13 +61,12 @@ export async function updateHealthCenter(payload: {
   operating_status?: string;
   queue_availability?: boolean;
 }): Promise<{ error?: string }> {
-  const supabase = await createClient();
-  const { data: { user: authUser } } = await supabase.auth.getUser();
-  if (!authUser) return { error: "Not authenticated" };
+  const sessionUser = await getSessionUser();
+  if (!sessionUser) return { error: "Not authenticated" };
   const [staff] = await db
     .select({ health_center_id: staffProfiles.health_center_id })
     .from(staffProfiles)
-    .where(eq(staffProfiles.user_id, authUser.id));
+    .where(eq(staffProfiles.user_id, sessionUser.id));
   if (!staff?.health_center_id) return { error: "No health center assigned" };
   await db
     .update(healthCenters)

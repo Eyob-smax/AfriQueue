@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
+import { signOut } from "@/lib/actions/auth";
 import { MaterialIcon } from "@/components/ui/material-icon";
-import { getOrCreateSupportConversation } from "@/lib/actions/chat";
+import { Button } from "@/components/ui/button";
 
 const navItems = [
   { href: "/dashboard/staff", label: "Live Queue", icon: "group" },
@@ -19,17 +19,6 @@ interface StaffSidebarProps {
 
 export function StaffSidebar({ healthCenterName }: StaffSidebarProps = {}) {
   const pathname = usePathname();
-  const router = useRouter();
-  const [supportLoading, setSupportLoading] = useState(false);
-
-  async function handleContactSupport() {
-    setSupportLoading(true);
-    const result = await getOrCreateSupportConversation();
-    setSupportLoading(false);
-    if (!result.error && result.conversationId) {
-      router.push(`/dashboard/chat?conversation=${result.conversationId}`);
-    }
-  }
 
   return (
     <aside className="w-64 border-r border-[#cfe7e5] dark:border-[#1e3a37] flex flex-col justify-between p-4 bg-white dark:bg-[#152a28] shrink-0">
@@ -83,42 +72,19 @@ export function StaffSidebar({ healthCenterName }: StaffSidebarProps = {}) {
             <MaterialIcon icon="chat" size={22} className={pathname === "/dashboard/chat" ? "fill-primary" : ""} />
             <p className={`text-sm font-medium ${pathname === "/dashboard/chat" ? "font-bold" : ""}`}>Messages</p>
           </Link>
-          <button
-            type="button"
-            onClick={handleContactSupport}
-            disabled={supportLoading}
-            className="flex items-center gap-3 px-3 py-2.5 w-full text-left text-[#4c9a93] hover:bg-background-light dark:hover:bg-background-dark rounded-xl cursor-pointer transition-colors disabled:opacity-50"
-          >
-            <MaterialIcon icon="support_agent" size={22} />
-            <p className="text-sm font-medium">Contact support</p>
-          </button>
-          <Link
-            href="/dashboard/staff/settings"
-            className="flex items-center gap-3 px-3 py-2.5 text-[#4c9a93] hover:bg-background-light dark:hover:bg-background-dark rounded-xl cursor-pointer transition-colors"
-          >
-            <MaterialIcon icon="settings" size={22} />
-            <p className="text-sm font-medium">Settings</p>
-          </Link>
         </nav>
       </div>
-      <div className="flex flex-col gap-4">
-        <div className="p-4 bg-background-light dark:bg-background-dark rounded-xl border border-[#cfe7e5] dark:border-[#1e3a37]">
-          <p className="text-xs font-bold text-[#4c9a93] uppercase tracking-wider mb-2">
-            Network Status
-          </p>
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-[#0d1b1a] dark:text-white">
-              Local Cache
-            </span>
-            <span className="text-[10px] bg-primary/20 text-primary px-2 py-0.5 rounded-full font-bold">
-              98% Full
-            </span>
-          </div>
-        </div>
-        <button className="flex w-full items-center justify-center gap-2 rounded-xl h-12 bg-urgency-emergency text-white text-sm font-bold tracking-wide hover:opacity-90 transition-opacity">
-          <MaterialIcon icon="warning" size={20} />
-          <span>Emergency Entry</span>
-        </button>
+      <div className="flex flex-col gap-2 pt-4 border-t border-[#cfe7e5] dark:border-[#1e3a37]">
+        <form action={signOut} className="w-full">
+          <Button
+            type="submit"
+            variant="outline"
+            className="w-full justify-start gap-3 h-11 rounded-xl border-[#cfe7e5] dark:border-[#1e3a37] text-[#0d1b1a] dark:text-white hover:bg-primary/10 hover:border-primary/30 dark:hover:border-primary/30"
+          >
+            <MaterialIcon icon="logout" size={22} />
+            Logout
+          </Button>
+        </form>
       </div>
     </aside>
   );

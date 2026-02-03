@@ -11,10 +11,12 @@ export default async function ClientDashboardPage() {
   const user = await getCurrentUserRole();
   if (!user) redirect("/auth/login");
   if (user.role !== "CLIENT") redirect("/dashboard");
+  if (!user.city || !user.country) redirect("/onboarding");
 
-  const city = user.city || "Nairobi";
+  const city = user.city;
   const centers = await getHealthCentersByCity(city);
-  const defaultMapCenter = user.city ? getCityCenter(user.city) : null;
+  const mapCenter = getCityCenter(user.city);
+  const defaultMapCenter = mapCenter ? { lat: mapCenter[0], lng: mapCenter[1] } : undefined;
 
   return (
     <div className="relative flex flex-col overflow-x-hidden">
@@ -72,7 +74,7 @@ export default async function ClientDashboardPage() {
             city={city}
             country={user.country ?? undefined}
             userId={user.userId}
-            defaultMapCenter={defaultMapCenter ?? undefined}
+            defaultMapCenter={defaultMapCenter}
           />
         </section>
       </div>

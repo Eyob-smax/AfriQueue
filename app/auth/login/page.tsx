@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { signIn, signInAdmin } from "@/lib/actions/auth";
-import { createClient } from "@/lib/supabase/client";
+import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MaterialIcon } from "@/components/ui/material-icon";
@@ -15,6 +15,7 @@ type AuthTab = "email" | "phone";
 
 export default function LoginPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const signInAsAdmin = searchParams.get("as") === "admin";
   const showConfirmEmailNotice = searchParams.get("confirm_email") === "1";
   const [authTab, setAuthTab] = useState<AuthTab>("email");
@@ -27,15 +28,12 @@ export default function LoginPage() {
     setError(null);
     setGoogleLoading(true);
     try {
-      const supabase = createClient();
-      const { data, error: err } = await supabase.auth.signInWithOAuth({
+      const { data, error: err } = await authClient.signIn.social({
         provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=dashboard`,
-        },
+        callbackURL: "/dashboard",
       });
       if (err) {
-        setError(err.message);
+        setError(err.message ?? "Failed to sign in with Google");
         setGoogleLoading(false);
         return;
       }
@@ -50,14 +48,30 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     setLoading(true);
-    const formData = new FormData(e.currentTarget);
-    const result = signInAsAdmin
-      ? await signInAdmin(formData)
-      : await signIn(formData);
-    if (result?.error) {
-      setError(result.error);
+    try {
+      const formData = new FormData(e.currentTarget);
+      const result = signInAsAdmin
+        ? await signInAdmin(formData)
+        : await signIn(formData);
+      if (result?.error) {
+        if (result.error === "NEXT_REDIRECT") {
+          router.push("/dashboard");
+          return;
+        }
+        setError(result.error);
+        return;
+      }
+    } catch (err) {
+      const digest = (err as { digest?: string })?.digest;
+      if (typeof digest === "string" && digest.startsWith("NEXT_REDIRECT")) {
+        const parts = digest.split(";");
+        const url = parts.length >= 3 ? parts[2] : "/dashboard";
+        router.push(url);
+        return;
+      }
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
       setLoading(false);
-      return;
     }
   }
 

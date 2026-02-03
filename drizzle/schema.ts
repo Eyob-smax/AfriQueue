@@ -11,6 +11,71 @@ import {
   pgEnum,
 } from "drizzle-orm/pg-core";
 
+// ============= Better Auth tables (identity: user, session, account, verification) =============
+export const user = pgTable("user", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  emailVerified: boolean("emailVerified").notNull().default(false),
+  image: text("image"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow().$onUpdate(() => new Date()),
+  // phone number plugin
+  phoneNumber: text("phoneNumber"),
+  phoneNumberVerified: boolean("phoneNumberVerified").default(false),
+  // app sync: optional role (CLIENT, STAFF) for upsert into public.users
+  role: text("role"),
+});
+
+export const session = pgTable("session", {
+  id: text("id").primaryKey(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  token: text("token").notNull().unique(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow().$onUpdate(() => new Date()),
+  ipAddress: text("ipAddress"),
+  userAgent: text("userAgent"),
+  userId: text("userId")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+});
+
+export const account = pgTable("account", {
+  id: text("id").primaryKey(),
+  accountId: text("accountId").notNull(),
+  providerId: text("providerId").notNull(),
+  userId: text("userId")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  accessToken: text("accessToken"),
+  refreshToken: text("refreshToken"),
+  idToken: text("idToken"),
+  accessTokenExpiresAt: timestamp("accessTokenExpiresAt"),
+  refreshTokenExpiresAt: timestamp("refreshTokenExpiresAt"),
+  scope: text("scope"),
+  password: text("password"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+export const verification = pgTable("verification", {
+  id: text("id").primaryKey(),
+  identifier: text("identifier").notNull(),
+  value: text("value").notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+// JWT plugin: jwks table
+export const jwks = pgTable("jwks", {
+  id: text("id").primaryKey(),
+  publicKey: text("publicKey").notNull(),
+  privateKey: text("privateKey").notNull(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  expiresAt: timestamp("expiresAt"),
+});
+
 export const userRoleEnum = pgEnum("user_role", [
   "CLIENT",
   "STAFF",
@@ -61,7 +126,7 @@ export const users = pgTable("users", {
   full_name: text("full_name").notNull(),
   email: text("email").notNull(),
   phone: text("phone").notNull(),
-  password_hash: text("password_hash"), // optional when synced from Supabase Auth
+  password_hash: text("password_hash"), // optional when using Better Auth (email/OAuth/phone)
   role: userRoleEnum("role").notNull(),
   status: varchar("status", [20]).default("ACTIVE"),
   created_at: timestamp("created_at").defaultNow(),
@@ -138,6 +203,7 @@ export const reservations = pgTable("reservations", {
   queue_number: integer("queue_number"),
   status: reservationStatusEnum("status").default("PENDING"),
   created_at: timestamp("created_at").defaultNow(),
+  completed_at: timestamp("completed_at"),
 });
 
 export const conversations = pgTable("conversations", {

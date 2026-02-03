@@ -1,7 +1,7 @@
 "use client";
 
 import { io as ioClient, type Socket } from "socket.io-client";
-import { createClient } from "@/lib/supabase/client";
+import { authClient } from "@/lib/auth-client";
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "http://localhost:3001";
 let socket: Socket | null = null;
@@ -12,11 +12,8 @@ export function getSocket(): Socket | null {
 
 export async function connectSocket(): Promise<Socket> {
   if (socket?.connected) return socket;
-  const supabase = createClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const token = session?.access_token;
+  const { data: tokenData } = await authClient.token();
+  const token = tokenData?.token;
   if (!token) {
     throw new Error("Not authenticated");
   }
