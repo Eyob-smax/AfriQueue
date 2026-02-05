@@ -7,10 +7,75 @@ import {
   conversations,
   conversationParticipants,
   messages,
+  healthCenters,
+  staffProfiles,
 } from "@/drizzle/schema";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import { emitToRoom } from "@/lib/socket-emit";
 import { createNotification } from "@/lib/actions/notifications";
+
+export type ChatContactAdmin = { id: string; full_name: string | null };
+export type ChatContactStaff = { id: string; full_name: string | null; health_center_name: string | null };
+export type ChatContactsForClient = { admins: ChatContactAdmin[]; staff: ChatContactStaff[] };
+
+/** For CLIENT role: admins + staff of health centers in the client's city/country. */
+export async function getChatContactsForClient(): Promise<ChatContactsForClient | null> {
+  const sessionUser = await getSessionUser();
+  if (!sessionUser) return null;
+
+  const [clientRow] = await db
+    .select({ role: users.role, city: users.city, country: users.country })
+    .from(users)
+    .where(eq(users.id, sessionUser.id));
+  if (!clientRow || clientRow.role !== "CLIENT") return null;
+
+  const city = clientRow.city?.trim() ?? "";
+  const country = clientRow.country?.trim() ?? "";
+  if (!city) return { admins: [], staff: [] };
+
+  const cityLower = city.toLowerCase();
+  const countryLower = country ? country.toLowerCase() : null;
+
+  const admins = await db
+    .select({ id: users.id, full_name: users.full_name })
+    .from(users)
+    .where(inArray(users.role, ["ADMIN", "SUPER_ADMIN"]))
+    .orderBy(users.full_name);
+
+  const hcCondition = countryLower
+    ? and(
+        sql`lower(trim(${healthCenters.city})) = ${cityLower}`,
+        sql`(${healthCenters.country} IS NULL OR lower(trim(${healthCenters.country})) = ${countryLower})`,
+        eq(healthCenters.is_blocked, false)
+      )
+    : and(
+        sql`lower(trim(${healthCenters.city})) = ${cityLower}`,
+        eq(healthCenters.is_blocked, false)
+      );
+
+  const staffRows = await db
+    .select({
+      id: users.id,
+      full_name: users.full_name,
+      health_center_name: healthCenters.name,
+    })
+    .from(users)
+    .innerJoin(staffProfiles, eq(users.id, staffProfiles.user_id))
+    .innerJoin(healthCenters, eq(staffProfiles.health_center_id, healthCenters.id))
+    .where(
+      and(eq(users.role, "STAFF"), hcCondition)
+    )
+    .orderBy(users.full_name);
+
+  return {
+    admins: admins.map((a) => ({ id: a.id, full_name: a.full_name })),
+    staff: staffRows.map((s) => ({
+      id: s.id,
+      full_name: s.full_name,
+      health_center_name: s.health_center_name ?? null,
+    })),
+  };
+}
 
 export async function createConversation(
   participantIds: string[],
@@ -92,6 +157,23 @@ export async function getMessages(conversationId: string): Promise<MessageRow[]>
   const sessionUser = await getSessionUser();
   if (!sessionUser) return [];
 
+  // Verify user is a participant in this conversation
+  const [participant] = await db
+    .select({ user_id: conversationParticipants.user_id })
+    .from(conversationParticipants)
+    .where(
+      and(
+        eq(conversationParticipants.conversation_id, conversationId),
+        eq(conversationParticipants.user_id, sessionUser.id)
+      )
+    )
+    .limit(1);
+
+  if (!participant) {
+    console.error("User not authorized to view this conversation");
+    return [];
+  }
+
   const rows = await db
     .select({
       id: messages.id,
@@ -127,6 +209,22 @@ export async function sendMessage(
 ): Promise<{ error?: string; messageId?: string; message?: MessageRow }> {
   const sessionUser = await getSessionUser();
   if (!sessionUser) return { error: "Not authenticated" };
+
+  // Verify user is a participant in this conversation
+  const [participant] = await db
+    .select({ user_id: conversationParticipants.user_id })
+    .from(conversationParticipants)
+    .where(
+      and(
+        eq(conversationParticipants.conversation_id, conversationId),
+        eq(conversationParticipants.user_id, sessionUser.id)
+      )
+    )
+    .limit(1);
+
+  if (!participant) {
+    return { error: "Not authorized to send messages in this conversation" };
+  }
 
   const [msg] = await db
     .insert(messages)

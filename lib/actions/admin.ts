@@ -65,10 +65,12 @@ export type PendingStaffRequest = {
   id: string;
   requester_id: string;
   status: string;
+  health_center_id: string | null;
   health_center_name: string | null;
   health_center_description: string | null;
   health_center_location: string | null;
   health_center_country: string | null;
+  health_center_city: string | null;
   created_at: Date | null;
   requester_email: string;
   requester_name: string;
@@ -84,10 +86,12 @@ export async function getPendingStaff(): Promise<PendingStaffRequest[]> {
       id: roleRequests.id,
       requester_id: roleRequests.requester_id,
       status: roleRequests.status,
+      health_center_id: roleRequests.health_center_id,
       health_center_name: roleRequests.health_center_name,
       health_center_description: roleRequests.health_center_description,
       health_center_location: roleRequests.health_center_location,
       health_center_country: roleRequests.health_center_country,
+      health_center_city: roleRequests.health_center_city,
       created_at: roleRequests.created_at,
       email: users.email,
       full_name: users.full_name,
@@ -107,10 +111,12 @@ export async function getPendingStaff(): Promise<PendingStaffRequest[]> {
     id: r.id,
     requester_id: r.requester_id!,
     status: r.status ?? "PENDING",
+    health_center_id: r.health_center_id ?? null,
     health_center_name: r.health_center_name,
     health_center_description: r.health_center_description,
     health_center_location: r.health_center_location,
     health_center_country: r.health_center_country ?? null,
+    health_center_city: r.health_center_city ?? null,
     created_at: r.created_at,
     requester_email: r.email ?? "",
     requester_name: r.full_name ?? "",
@@ -132,27 +138,30 @@ export async function approveStaff(requestId: string): Promise<{ error?: string 
 
   const userId = req.requester_id;
 
-  let healthCenterId: string | null = null;
-  const hcName = req.health_center_name?.trim() || "New Health Center";
-  const [existingHc] = await db
-    .select({ id: healthCenters.id })
-    .from(healthCenters)
-    .where(eq(healthCenters.name, hcName))
-    .limit(1);
-  if (existingHc) {
-    healthCenterId = existingHc.id;
-  } else {
-    const [inserted] = await db
-      .insert(healthCenters)
-      .values({
-        name: hcName,
-        city: req.health_center_location ?? "Nairobi",
-        address: req.health_center_location ?? null,
-        description: req.health_center_description ?? null,
-        status: "OPEN",
-      })
-      .returning({ id: healthCenters.id });
-    healthCenterId = inserted?.id ?? null;
+  let healthCenterId: string | null = req.health_center_id ?? null;
+  if (!healthCenterId) {
+    const hcName = req.health_center_name?.trim() || "New Health Center";
+    const [existingHc] = await db
+      .select({ id: healthCenters.id })
+      .from(healthCenters)
+      .where(eq(healthCenters.name, hcName))
+      .limit(1);
+    if (existingHc) {
+      healthCenterId = existingHc.id;
+    } else {
+      const [inserted] = await db
+        .insert(healthCenters)
+        .values({
+          name: hcName,
+          city: req.health_center_city ?? req.health_center_location ?? "Nairobi",
+          country: req.health_center_country ?? null,
+          address: req.health_center_location ?? null,
+          description: req.health_center_description ?? null,
+          status: "OPEN",
+        })
+        .returning({ id: healthCenters.id });
+      healthCenterId = inserted?.id ?? null;
+    }
   }
 
   const now = new Date();

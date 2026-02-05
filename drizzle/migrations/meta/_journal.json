@@ -64,6 +64,13 @@
       "when": 1769983000000,
       "tag": "0008_health_centers_country",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1769984000000,
+      "tag": "0009_role_requests_health_center_id_city",
+      "breakpoints": true
     }
   ]
 }

@@ -156,12 +156,15 @@ export async function signUpStaff(formData: FormData): Promise<AuthResult> {
   const password = formData.get("password") as string;
   const fullName = (formData.get("fullName") as string)?.trim() || "Staff";
   const phone = (formData.get("phone") as string)?.trim() || "";
+  const healthCenterId = (formData.get("healthCenterId") as string)?.trim() || "";
   const healthCenterName = (formData.get("healthCenterName") as string)?.trim() || "";
-  const healthCenterDescription = (formData.get("healthCenterDescription") as string)?.trim() || "";
-  const healthCenterLocation = (formData.get("healthCenterLocation") as string)?.trim() || "";
   const healthCenterCountry = (formData.get("healthCenterCountry") as string)?.trim() || "";
+  const healthCenterCity = (formData.get("healthCenterCity") as string)?.trim() || "";
   if (!email || !password) {
     return { error: "Email and password are required" };
+  }
+  if (!healthCenterId || !healthCenterCountry || !healthCenterCity) {
+    return { error: "Please select a clinic, country, and city" };
   }
   const res = await auth.api.signUpEmail({
     body: { email, password, name: fullName, role: "STAFF" },
@@ -184,10 +187,10 @@ export async function signUpStaff(formData: FormData): Promise<AuthResult> {
         requester_id: userId,
         requested_role: "STAFF",
         status: "PENDING",
+        health_center_id: healthCenterId || null,
         health_center_name: healthCenterName || null,
-        health_center_description: healthCenterDescription || null,
-        health_center_location: healthCenterLocation || null,
         health_center_country: healthCenterCountry || null,
+        health_center_city: healthCenterCity || null,
       })
       .returning({ id: roleRequests.id });
     const roleRequestId = inserted?.id;

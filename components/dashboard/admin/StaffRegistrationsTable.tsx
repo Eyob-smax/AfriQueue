@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { approveStaff, rejectStaff } from "@/lib/actions/admin";
 import type { PendingStaffRequest } from "@/lib/actions/admin";
-import { COUNTRIES } from "@/lib/constants/locations";
+import { COUNTRIES, getCitiesForCountry } from "@/lib/constants/locations";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -66,8 +66,9 @@ export function StaffRegistrationsTable({ requests }: StaffRegistrationsTablePro
             <TableHead>Name</TableHead>
             <TableHead>Email</TableHead>
             <TableHead>Phone</TableHead>
-            <TableHead>Health Center</TableHead>
+            <TableHead>Clinic</TableHead>
             <TableHead>Country</TableHead>
+            <TableHead>City</TableHead>
             <TableHead>Submitted</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
@@ -80,6 +81,7 @@ export function StaffRegistrationsTable({ requests }: StaffRegistrationsTablePro
               <TableCell>{r.requester_phone}</TableCell>
               <TableCell>{r.health_center_name ?? "—"}</TableCell>
               <TableCell>{r.health_center_country ? (COUNTRIES.find((c) => c.value === r.health_center_country)?.label ?? r.health_center_country) : "—"}</TableCell>
+              <TableCell>{r.health_center_city ? (r.health_center_country ? getCitiesForCountry(r.health_center_country).find((c) => c.value === r.health_center_city)?.label ?? r.health_center_city : r.health_center_city) : "—"}</TableCell>
               <TableCell>
                 {r.created_at
                   ? new Date(r.created_at).toLocaleDateString("en-US", {

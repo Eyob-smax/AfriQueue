@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { connectSocket } from "@/lib/socket-client";
-import { joinQueue, getQueueState } from "@/lib/actions/queue";
-import type { HealthCenterWithQueues, QueueState } from "@/lib/actions/queue";
+import { joinQueue, leaveQueue, getQueueState } from "@/lib/actions/queue";
+import type { HealthCenterWithQueues, QueueState, MyQueueReservation } from "@/lib/actions/queue";
 import { ClinicsMap } from "@/components/dashboard/ClinicsMap";
 import { Button } from "@/components/ui/button";
 import { MaterialIcon } from "@/components/ui/material-icon";
@@ -12,6 +12,7 @@ import { formatDistance } from "@/lib/geo";
 
 interface ClinicsNearYouProps {
   initialCenters: HealthCenterWithQueues[];
+  initialMyReservations?: MyQueueReservation[];
   city: string;
   country?: string | null;
   userId: string;
@@ -31,6 +32,7 @@ function estimateWaitMinutes(count: number): string {
 
 export function ClinicsNearYou({
   initialCenters,
+  initialMyReservations = [],
   city,
   country,
   userId,
@@ -42,10 +44,19 @@ export function ClinicsNearYou({
   const [centers, setCenters] = useState(initialCenters);
   const [selectedCenterId, setSelectedCenterId] = useState<string | null>(null);
   const [filterTab, setFilterTab] = useState<FilterTab>("nearest");
-  const [subscribedQueueId, setSubscribedQueueId] = useState<string | null>(null);
+  const [subscribedQueueId, setSubscribedQueueId] = useState<string | null>(
+    () => initialMyReservations[0]?.queueId ?? null
+  );
   const [queueState, setQueueState] = useState<QueueState | null>(null);
+  const [queueCountByQueueId, setQueueCountByQueueId] = useState<Record<string, number>>({});
+  const [myReservations, setMyReservations] = useState<Record<string, { reservationId: string; queueNumber: number | null }>>(
+    () => Object.fromEntries(initialMyReservations.map((r) => [r.queueId, { reservationId: r.reservationId, queueNumber: r.queueNumber }]))
+  );
   const [joiningQueueId, setJoiningQueueId] = useState<string | null>(null);
+  const [leavingQueueId, setLeavingQueueId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const allQueueIds = centers.flatMap((c) => c.queues.map((q) => q.id));
 
   useEffect(() => {
     let socket: Awaited<ReturnType<typeof connectSocket>> | null = null;
@@ -53,10 +64,16 @@ export function ClinicsNearYou({
       .then((s) => {
         socket = s;
         s.on("queue:joined", (data: { snapshot?: QueueState }) => {
-          if (data.snapshot) setQueueState(data.snapshot);
+          if (data.snapshot) {
+            setQueueState((prev) => (prev?.queueId === data.snapshot!.queueId ? data.snapshot! : prev));
+            setQueueCountByQueueId((prev) => ({ ...prev, [data.snapshot!.queueId]: data.snapshot!.count }));
+          }
         });
         s.on("queue:advanced", (data: { snapshot?: QueueState }) => {
-          if (data.snapshot) setQueueState(data.snapshot);
+          if (data.snapshot) {
+            setQueueState((prev) => (prev?.queueId === data.snapshot!.queueId ? data.snapshot! : prev));
+            setQueueCountByQueueId((prev) => ({ ...prev, [data.snapshot!.queueId]: data.snapshot!.count }));
+          }
         });
       })
       .catch(() => {});
@@ -68,20 +85,30 @@ export function ClinicsNearYou({
   }, []);
 
   useEffect(() => {
+    if (allQueueIds.length === 0) return;
+    connectSocket()
+      .then((s) => {
+        allQueueIds.forEach((queueId) => s.emit("queue:subscribe", { queueId }));
+      })
+      .catch(() => {});
+    return () => {
+      connectSocket().then((s) => {
+        allQueueIds.forEach((queueId) => s.emit("queue:leave", { queueId }));
+      });
+    };
+  }, [allQueueIds.join(",")]);
+
+  useEffect(() => {
     if (!subscribedQueueId) return;
     connectSocket()
       .then((s) => s.emit("queue:subscribe", { queueId: subscribedQueueId }))
       .catch(() => {});
+    getQueueState(subscribedQueueId).then(setQueueState);
     return () => {
       connectSocket().then((s) => {
         s.emit("queue:leave", { queueId: subscribedQueueId });
       });
     };
-  }, [subscribedQueueId]);
-
-  useEffect(() => {
-    if (!subscribedQueueId) return;
-    getQueueState(subscribedQueueId).then(setQueueState);
   }, [subscribedQueueId]);
 
   async function handleJoinQueue(queueId: string, e: React.MouseEvent) {
@@ -94,11 +121,36 @@ export function ClinicsNearYou({
       setJoiningQueueId(null);
       return;
     }
+    setMyReservations((prev) => ({
+      ...prev,
+      [queueId]: { reservationId: result.reservationId!, queueNumber: result.queueNumber ?? null },
+    }));
     setSubscribedQueueId(queueId);
+    setQueueCountByQueueId((prev) => ({ ...prev, [queueId]: (prev[queueId] ?? 0) + 1 }));
     setJoiningQueueId(null);
   }
 
+  async function handleLeaveQueue(queueId: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    setError(null);
+    setLeavingQueueId(queueId);
+    const result = await leaveQueue(queueId);
+    if (result.error) {
+      setError(result.error);
+      setLeavingQueueId(null);
+      return;
+    }
+    setMyReservations((prev) => {
+      const next = { ...prev };
+      delete next[queueId];
+      return next;
+    });
+    if (subscribedQueueId === queueId) setSubscribedQueueId(null);
+    setLeavingQueueId(null);
+  }
+
   const countForQueue = (queueId: string) => {
+    if (queueCountByQueueId[queueId] !== undefined) return queueCountByQueueId[queueId];
     if (queueState?.queueId === queueId) return queueState.count;
     const center = centers.find((c) => c.queues.some((q) => q.id === queueId));
     const q = center?.queues.find((q) => q.id === queueId);
@@ -107,8 +159,8 @@ export function ClinicsNearYou({
 
   const sortedCenters = [...centers].sort((a, b) => {
     if (filterTab === "shortest-wait") {
-      const aCount = a.queues[0]?.count ?? 999;
-      const bCount = b.queues[0]?.count ?? 999;
+      const aCount = a.queues[0] ? countForQueue(a.queues[0].id) : 999;
+      const bCount = b.queues[0] ? countForQueue(b.queues[0].id) : 999;
       return aCount - bCount;
     }
     if (filterTab === "specialty") {
@@ -208,17 +260,42 @@ export function ClinicsNearYou({
 
               <div className="flex gap-2">
                 {q ? (
-                  <Button
-                    className="flex-1 rounded-lg bg-primary text-[#0d1b1a] h-11 text-sm font-bold hover:bg-primary/90"
-                    onClick={(e) => handleJoinQueue(q.id, e)}
-                    disabled={isJoining}
-                  >
-                    {isJoining ? (
-                      <MaterialIcon icon="sync" size={18} className="animate-spin" />
-                    ) : (
-                      "Join Queue"
-                    )}
-                  </Button>
+                  myReservations[q.id] ? (
+                    <>
+                      <span
+                        className="flex-1 flex items-center justify-center gap-2 rounded-lg h-11 text-sm font-bold bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200 border border-orange-300 dark:border-orange-700"
+                        title={`Position ${myReservations[q.id]?.queueNumber ?? "—"}`}
+                      >
+                        <MaterialIcon icon="check_circle" size={18} />
+                        Joined
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-lg h-11 px-4 text-sm font-bold border-red-200 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950"
+                        onClick={(e) => handleLeaveQueue(q.id, e)}
+                        disabled={!!leavingQueueId}
+                      >
+                        {leavingQueueId === q.id ? (
+                          <MaterialIcon icon="sync" size={18} className="animate-spin" />
+                        ) : (
+                          "Leave"
+                        )}
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      className="flex-1 rounded-lg bg-primary text-[#0d1b1a] h-11 text-sm font-bold hover:bg-primary/90"
+                      onClick={(e) => handleJoinQueue(q.id, e)}
+                      disabled={isJoining}
+                    >
+                      {isJoining ? (
+                        <MaterialIcon icon="sync" size={18} className="animate-spin" />
+                      ) : (
+                        "Join Queue"
+                      )}
+                    </Button>
+                  )
                 ) : (
                   <Button
                     className="flex-1 rounded-lg bg-primary text-[#0d1b1a] h-11 text-sm font-bold"

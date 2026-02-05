@@ -11,7 +11,7 @@ const defaultCenter: [number, number] = [-1.2921, 36.8219]; // Nairobi
 interface ClinicsMapProps {
   centers: HealthCenterWithQueues[];
   selectedId: string | null;
-  onSelect: (id: string) => void;
+  onSelect?: (id: string) => void;
   userLat?: number;
   userLng?: number;
 }
@@ -89,7 +89,7 @@ export function ClinicsMap({
       marker.bindPopup(
         `<span class="font-medium">${escapeHtml(hc.name)}</span><br/><span class="text-sm text-muted-foreground">${escapeHtml(hc.address ?? hc.city ?? "")}</span>`
       );
-      marker.on("click", () => onSelect(hc.id));
+      marker.on("click", () => onSelect?.(hc.id));
       markersRef.current.push(marker);
     });
 

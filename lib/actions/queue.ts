@@ -14,7 +14,7 @@ import { emitToRoom } from "@/lib/socket-emit";
 import { haversineKm } from "@/lib/geo";
 import { createNotification } from "@/lib/actions/notifications";
 
-export async function joinQueue(queueId: string): Promise<{ error?: string; reservationId?: string }> {
+export async function joinQueue(queueId: string): Promise<{ error?: string; reservationId?: string; queueNumber?: number | null }> {
   const sessionUser = await getSessionUser();
   if (!sessionUser) return { error: "Not authenticated" };
 
@@ -104,6 +104,68 @@ export async function cancelReservation(reservationId: string): Promise<{ error?
   await emitToRoom(`queue:${res.queue_id}`, "queue:advanced", { snapshot });
 
   return {};
+}
+
+/** Client leaves a queue (cancels their PENDING/CONFIRMED reservation). Updates DB and emits realtime. */
+export async function leaveQueue(queueId: string): Promise<{ error?: string }> {
+  const sessionUser = await getSessionUser();
+  if (!sessionUser) return { error: "Not authenticated" };
+
+  const [res] = await db
+    .select({ id: reservations.id })
+    .from(reservations)
+    .where(
+      and(
+        eq(reservations.queue_id, queueId),
+        eq(reservations.client_id, sessionUser.id),
+        inArray(reservations.status, ["PENDING", "CONFIRMED"])
+      )
+    );
+  if (!res) return { error: "You are not in this queue" };
+
+  await db
+    .update(reservations)
+    .set({ status: "CANCELLED" })
+    .where(eq(reservations.id, res.id));
+
+  const snapshot = await getQueueState(queueId);
+  await emitToRoom(`queue:${queueId}`, "queue:advanced", { snapshot });
+
+  return {};
+}
+
+export type MyQueueReservation = {
+  queueId: string;
+  reservationId: string;
+  queueNumber: number | null;
+};
+
+/** Current user's active (PENDING/CONFIRMED) queue reservations. */
+export async function getMyQueueReservations(): Promise<MyQueueReservation[]> {
+  const sessionUser = await getSessionUser();
+  if (!sessionUser) return [];
+
+  const rows = await db
+    .select({
+      queue_id: reservations.queue_id,
+      id: reservations.id,
+      queue_number: reservations.queue_number,
+    })
+    .from(reservations)
+    .where(
+      and(
+        eq(reservations.client_id, sessionUser.id),
+        inArray(reservations.status, ["PENDING", "CONFIRMED"])
+      )
+    );
+
+  return rows
+    .filter((r) => r.queue_id != null)
+    .map((r) => ({
+      queueId: r.queue_id!,
+      reservationId: r.id,
+      queueNumber: r.queue_number,
+    }));
 }
 
 export type QueueReservation = {
@@ -309,9 +371,19 @@ export async function getHealthCentersByCity(
   city: string,
   country?: string | null
 ): Promise<HealthCenterWithQueues[]> {
-  const conditions = country
-    ? and(eq(healthCenters.city, city), eq(healthCenters.country, country))
-    : eq(healthCenters.city, city);
+  const cityLower = city.trim().toLowerCase();
+  const countryLower = country?.trim().toLowerCase();
+  // Match city (case-insensitive). If client has country: center must match country or have country unset (NULL).
+  const conditions = countryLower
+    ? and(
+        sql`lower(trim(${healthCenters.city})) = ${cityLower}`,
+        sql`(${healthCenters.country} IS NULL OR lower(trim(${healthCenters.country})) = ${countryLower})`,
+        eq(healthCenters.is_blocked, false)
+      )
+    : and(
+        sql`lower(trim(${healthCenters.city})) = ${cityLower}`,
+        eq(healthCenters.is_blocked, false)
+      );
   const centers = await db
     .select()
     .from(healthCenters)

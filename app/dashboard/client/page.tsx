@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUserRole } from "@/lib/actions/auth";
-import { getHealthCentersByCity } from "@/lib/actions/queue";
+import { getHealthCentersByCity, getMyQueueReservations } from "@/lib/actions/queue";
 import { getCityCenter } from "@/lib/constants/locations";
 import { ClinicsNearYou } from "@/components/dashboard/ClinicsNearYou";
 import { MaterialIcon } from "@/components/ui/material-icon";
@@ -14,7 +14,10 @@ export default async function ClientDashboardPage() {
   if (!user.city || !user.country) redirect("/onboarding");
 
   const city = user.city;
-  const centers = await getHealthCentersByCity(city, user.country ?? undefined);
+  const [centers, myReservations] = await Promise.all([
+    getHealthCentersByCity(city, user.country ?? undefined),
+    getMyQueueReservations(),
+  ]);
   const mapCenter = getCityCenter(user.city);
   const defaultMapCenter = mapCenter ? { lat: mapCenter[0], lng: mapCenter[1] } : undefined;
 
@@ -63,6 +66,7 @@ export default async function ClientDashboardPage() {
         <section>
           <ClinicsNearYou
             initialCenters={centers}
+            initialMyReservations={myReservations}
             city={city}
             country={user.country ?? undefined}
             userId={user.userId}

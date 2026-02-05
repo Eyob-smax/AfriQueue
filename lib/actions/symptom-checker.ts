@@ -5,6 +5,12 @@ import { getHealthAssistantReply, type HealthAssistantMessage } from "@/lib/groq
 
 const RECOMMENDATION_REGEX = /RECOMMENDATION:\s*(.+?)\s*–\s*(.+)$/im;
 
+/** Strip AI "think" blocks so only user-facing message is shown. */
+const THINK_BLOCK_REGEX = /<think>[\s\S]*?<\/think>/gi;
+function stripThinkBlocks(text: string): string {
+  return text.replace(THINK_BLOCK_REGEX, "").trim().replace(/\n{3,}/g, "\n\n");
+}
+
 export type SymptomMessage = { role: string; content: string };
 
 export type SubmitSymptomResult = {
@@ -39,6 +45,7 @@ export async function submitSymptomMessage(
 
   try {
     let content = await getHealthAssistantReply(groqMessages);
+    content = stripThinkBlocks(content);
     let recommendation: { title: string; description: string } | undefined;
 
     const match = content.match(RECOMMENDATION_REGEX);

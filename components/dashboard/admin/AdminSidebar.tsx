@@ -8,12 +8,12 @@ import { Button } from "@/components/ui/button";
 
 const navItems = [
   { href: "/dashboard/admin", label: "Overview", icon: "dashboard" },
+  { href: "/dashboard/admin/chat", label: "Chat", icon: "chat" },
   { href: "/dashboard/admin/staff-registrations", label: "Staff Registrations", icon: "person_add" },
   { href: "/dashboard/admin/health-centers", label: "Health Centers", icon: "local_hospital" },
   { href: "/dashboard/admin/staff", label: "Staff Accounts", icon: "group" },
   { href: "/dashboard/admin/clients", label: "Clients", icon: "people" },
   { href: "/dashboard/admin/reports", label: "Reports", icon: "bar_chart" },
-  { href: "/dashboard/admin/chat", label: "Chat", icon: "chat" },
   { href: "/dashboard/admin/audit", label: "Audit Log", icon: "history" },
 ];
 
@@ -51,7 +51,7 @@ export function AdminSidebar() {
                 }`}
               >
                 <MaterialIcon
-                  icon={item.icon as "dashboard" | "person_add" | "local_hospital" | "group" | "people" | "bar_chart" | "chat" | "history"}
+                  icon={item.icon as "dashboard" | "chat" | "person_add" | "local_hospital" | "group" | "people" | "bar_chart" | "history"}
                   size={22}
                   className={isActive ? "fill-primary" : ""}
                 />

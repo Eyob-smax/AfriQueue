@@ -16,6 +16,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -45,6 +55,8 @@ export function QueueBoard({ userId: _userId, healthCenterId, healthCenterName, 
   const [editQueueDate, setEditQueueDate] = useState("");
   const [editStatus, setEditStatus] = useState("ACTIVE");
   const [editLoading, setEditLoading] = useState(false);
+  const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
+  const [removeConfirmReservation, setRemoveConfirmReservation] = useState<{ id: string; clientName: string } | null>(null);
 
   useEffect(() => {
     if (!queueId) return;
@@ -401,13 +413,17 @@ export function QueueBoard({ userId: _userId, healthCenterId, healthCenterName, 
                         <MaterialIcon icon="chat" size={18} />
                         Message
                       </Button>
-                      <button
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-lg gap-1.5 text-primary border-primary/50 hover:bg-primary/10"
                         onClick={() => handleAdvance(serving.id)}
                         disabled={loading}
-                        className="size-10 rounded-lg flex items-center justify-center bg-background-light dark:bg-background-dark text-primary border border-[#cfe7e5] dark:border-[#1e3a37]"
+                        aria-label="Mark as seen and remove from queue (patient received care)"
                       >
-                        <MaterialIcon icon="check_circle" size={20} />
-                      </button>
+                        <MaterialIcon icon="check_circle" size={18} />
+                        Remove from queue
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -457,16 +473,50 @@ export function QueueBoard({ userId: _userId, healthCenterId, healthCenterName, 
                       <MaterialIcon icon="chat" size={16} />
                       Message
                     </Button>
-                    <button
-                      onClick={() => handleCancel(r.id)}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-lg gap-1 text-xs text-red-600 border-red-200 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950 dark:text-red-400"
+                      onClick={() => {
+                        setRemoveConfirmReservation({ id: r.id, clientName: r.client_name ?? `Patient #${r.queue_number}` });
+                        setRemoveConfirmOpen(true);
+                      }}
                       disabled={loading}
-                      className="size-10 rounded-lg flex items-center justify-center bg-background-light dark:bg-background-dark text-[#4c9a93] border border-[#cfe7e5] dark:border-[#1e3a37]"
+                      aria-label="Remove this patient from the queue (e.g. no-show or left)"
                     >
-                      <MaterialIcon icon="block" size={18} />
-                    </button>
+                      <MaterialIcon icon="block" size={16} />
+                      Remove from queue
+                    </Button>
                   </div>
                 </div>
               ))}
+              <AlertDialog open={removeConfirmOpen} onOpenChange={(open) => { setRemoveConfirmOpen(open); if (!open) setRemoveConfirmReservation(null); }}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Remove from queue?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {removeConfirmReservation
+                        ? `Remove ${removeConfirmReservation.clientName} from the queue? They will no longer be waiting.`
+                        : ""}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      variant="destructive"
+                      onClick={() => {
+                        if (removeConfirmReservation) {
+                          handleCancel(removeConfirmReservation.id);
+                          setRemoveConfirmOpen(false);
+                          setRemoveConfirmReservation(null);
+                        }
+                      }}
+                    >
+                      Remove
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
               {reservations.length === 0 && queueId && (
                 <p className="text-sm text-[#4c9a93] py-8 text-center">
                   No patients in queue.

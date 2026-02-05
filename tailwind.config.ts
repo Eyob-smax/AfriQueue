@@ -48,14 +48,6 @@ const config: Config = {
           "monospace",
         ],
       },
-      borderRadius: {
-        DEFAULT: "0.5rem",
-        lg: "1rem",
-        xl: "1.5rem",
-        "2xl": "1.5rem",
-        "3xl": "2rem",
-        full: "9999px",
-      },
       boxShadow: {
         xlsoft: "0 10px 30px rgba(2,6,23,0.15)",
       },

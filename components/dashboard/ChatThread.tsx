@@ -23,18 +23,23 @@ export function ChatThread({
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    getMessages(conversationId).then(setMessages);
+    setLoading(true);
+    getMessages(conversationId)
+      .then(setMessages)
+      .finally(() => setLoading(false));
   }, [conversationId]);
 
   useEffect(() => {
+    let cleanup: (() => void) | undefined;
     connectSocket()
       .then((s) => {
         s.emit("chat:join", { conversationId });
-        s.on("chat:message:sent", (msg: MessageRow & { sender_id?: string }) => {
+        const handler = (msg: MessageRow & { sender_id?: string }) => {
           if (msg.conversation_id === conversationId) {
             const newMsg: MessageRow = {
               id: msg.id,
@@ -49,12 +54,18 @@ export function ChatThread({
               prev.some((m) => m.id === newMsg.id) ? prev : [...prev, newMsg]
             );
           }
-        });
-        return () => {
-          s.off("chat:message:sent");
+        };
+        s.on("chat:message:sent", handler);
+        cleanup = () => {
+          s.off("chat:message:sent", handler);
         };
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.error("Failed to connect to chat:", err);
+      });
+    return () => {
+      if (cleanup) cleanup();
+    };
   }, [conversationId]);
 
   useEffect(() => {
@@ -64,9 +75,6 @@ export function ChatThread({
   async function handleSend() {
     const text = input.trim();
     if (!text || sending) return;
-    // #region agent log
-    fetch("http://127.0.0.1:7245/ingest/76b9be47-6856-4e89-a9e9-f4766eb51cb4",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({location:"ChatThread.tsx:handleSend:entry",message:"handleSend called",data:{conversationId},timestamp:Date.now(),sessionId:"debug-session",hypothesisId:"H3"})}).catch(()=>{});
-    // #endregion
     setError(null);
     setSending(true);
     const result = await sendMessage(conversationId, text);
@@ -94,12 +102,17 @@ export function ChatThread({
         </h3>
       </div>
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {messages.length === 0 && (
+        {loading && (
+          <p className="text-sm text-muted-foreground text-center py-4">
+            Loading messages...
+          </p>
+        )}
+        {!loading && messages.length === 0 && (
           <p className="text-sm text-muted-foreground text-center py-4">
             No messages yet. Say hello!
           </p>
         )}
-        {messages.map((msg) => {
+        {!loading && messages.map((msg) => {
           const isMe = msg.sender_id === currentUserId;
           return (
             <div

@@ -2,8 +2,41 @@
 
 import { getSessionUser } from "@/lib/auth-session";
 import { db } from "@/drizzle";
-import { healthCenters, staffProfiles, queues, reservations } from "@/drizzle/schema";
+import {
+  healthCenters,
+  staffProfiles,
+  queues,
+  reservations,
+} from "@/drizzle/schema";
 import { eq, and, inArray, sql } from "drizzle-orm";
+
+/** Public: list non-blocked health centers for staff registration dropdown. No auth required. */
+export type HealthCenterOption = {
+  id: string;
+  name: string;
+  city: string;
+  country: string | null;
+};
+export async function getHealthCentersForStaffRegistration(): Promise<
+  HealthCenterOption[]
+> {
+  const rows = await db
+    .select({
+      id: healthCenters.id,
+      name: healthCenters.name,
+      city: healthCenters.city,
+      country: healthCenters.country,
+    })
+    .from(healthCenters)
+    .where(eq(healthCenters.is_blocked, false))
+    .orderBy(healthCenters.name);
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    city: r.city,
+    country: r.country ?? null,
+  }));
+}
 
 export type HealthCenterForStaff = {
   id: string;
@@ -73,14 +106,30 @@ export async function updateHealthCenter(payload: {
     .set({
       ...(payload.name !== undefined && { name: payload.name.trim() }),
       ...(payload.city !== undefined && { city: payload.city.trim() }),
-      ...(payload.address !== undefined && { address: payload.address.trim() || null }),
-      ...(payload.latitude !== undefined && { latitude: payload.latitude || null }),
-      ...(payload.longitude !== undefined && { longitude: payload.longitude || null }),
-      ...(payload.description !== undefined && { description: payload.description?.trim() || null }),
-      ...(payload.services !== undefined && { services: payload.services?.trim() || null }),
-      ...(payload.specialties !== undefined && { specialties: payload.specialties?.length ? payload.specialties : null }),
-      ...(payload.operating_status !== undefined && { operating_status: payload.operating_status }),
-      ...(payload.queue_availability !== undefined && { queue_availability: payload.queue_availability }),
+      ...(payload.address !== undefined && {
+        address: payload.address.trim() || null,
+      }),
+      ...(payload.latitude !== undefined && {
+        latitude: payload.latitude || null,
+      }),
+      ...(payload.longitude !== undefined && {
+        longitude: payload.longitude || null,
+      }),
+      ...(payload.description !== undefined && {
+        description: payload.description?.trim() || null,
+      }),
+      ...(payload.services !== undefined && {
+        services: payload.services?.trim() || null,
+      }),
+      ...(payload.specialties !== undefined && {
+        specialties: payload.specialties?.length ? payload.specialties : null,
+      }),
+      ...(payload.operating_status !== undefined && {
+        operating_status: payload.operating_status,
+      }),
+      ...(payload.queue_availability !== undefined && {
+        queue_availability: payload.queue_availability,
+      }),
     })
     .where(eq(healthCenters.id, staff.health_center_id));
   return {};
@@ -100,10 +149,17 @@ export type HealthCenterPublic = {
   operating_status: string | null;
   queue_availability: boolean | null;
   status: string | null;
-  queues: { id: string; service_type: string | null; queue_date: Date | null; count: number }[];
+  queues: {
+    id: string;
+    service_type: string | null;
+    queue_date: Date | null;
+    count: number;
+  }[];
 };
 
-export async function getHealthCenterById(id: string): Promise<HealthCenterPublic | null> {
+export async function getHealthCenterById(
+  id: string,
+): Promise<HealthCenterPublic | null> {
   const [hc] = await db
     .select()
     .from(healthCenters)
@@ -127,8 +183,8 @@ export async function getHealthCenterById(id: string): Promise<HealthCenterPubli
         .where(
           and(
             eq(reservations.queue_id, q.id),
-            inArray(reservations.status, ["PENDING", "CONFIRMED"])
-          )
+            inArray(reservations.status, ["PENDING", "CONFIRMED"]),
+          ),
         );
       return {
         id: q.id,
@@ -136,7 +192,7 @@ export async function getHealthCenterById(id: string): Promise<HealthCenterPubli
         queue_date: q.queue_date,
         count: Number(c?.count ?? 0),
       };
-    })
+    }),
   );
 
   return {

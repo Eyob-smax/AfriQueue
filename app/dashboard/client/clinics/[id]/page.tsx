@@ -134,7 +134,6 @@ export default async function ClinicDetailPage({
               <ClinicsMap
                 centers={[mapCenter]}
                 selectedId={center.id}
-                onSelect={() => {}}
                 userLat={parseFloat(center.latitude)}
                 userLng={parseFloat(center.longitude)}
               />

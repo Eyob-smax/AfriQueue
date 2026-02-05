@@ -273,10 +273,12 @@ export const roleRequests = pgTable("role_requests", {
 
   reason: text("reason"),
 
+  health_center_id: uuid("health_center_id").references(() => healthCenters.id),
   health_center_name: text("health_center_name"),
   health_center_description: text("health_center_description"),
   health_center_location: text("health_center_location"),
   health_center_country: text("health_center_country"),
+  health_center_city: text("health_center_city"),
 
   created_at: timestamp("created_at").defaultNow(),
   reviewed_at: timestamp("reviewed_at"),

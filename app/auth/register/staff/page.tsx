@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { signUpStaff } from "@/lib/actions/auth";
+import { getHealthCentersForStaffRegistration } from "@/lib/actions/health-center";
+import type { HealthCenterOption } from "@/lib/actions/health-center";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Logo } from "@/components/onboarding/Logo";
 import { MaterialIcon } from "@/components/ui/material-icon";
-import { COUNTRIES } from "@/lib/constants/locations";
+import { COUNTRIES, getCitiesForCountry } from "@/lib/constants/locations";
 import {
   Select,
   SelectContent,
@@ -20,17 +22,55 @@ export default function StaffRegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [country, setCountry] = useState("");
+  const [city, setCity] = useState("");
+  const [clinicId, setClinicId] = useState("");
+  const [healthCenters, setHealthCenters] = useState<HealthCenterOption[]>([]);
+
+  useEffect(() => {
+    getHealthCentersForStaffRegistration().then(setHealthCenters);
+  }, []);
+
+  const cityOptions = country ? getCitiesForCountry(country) : [];
+  const filteredClinics = healthCenters.filter((hc) => {
+    const countryMatch = (hc.country ?? "").toLowerCase() === country.toLowerCase();
+    const cityMatch = (hc.city ?? "").toLowerCase().replace(/\s+/g, "-") === city.toLowerCase() ||
+      (hc.city ?? "").toLowerCase() === city.replace(/-/g, " ").toLowerCase();
+    return countryMatch && cityMatch;
+  });
+
+  function onCountryChange(value: string) {
+    setCountry(value);
+    setCity("");
+    setClinicId("");
+  }
+
+  function onCityChange(value: string) {
+    setCity(value);
+    setClinicId("");
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
-    if (!country) {
-      setError("Please select a country");
+    if (!country || !city) {
+      setError("Please select country and city");
+      return;
+    }
+    if (!clinicId) {
+      setError("Please select a clinic");
+      return;
+    }
+    const selectedClinic = filteredClinics.find((c) => c.id === clinicId);
+    if (!selectedClinic) {
+      setError("Please select a valid clinic");
       return;
     }
     setLoading(true);
     const formData = new FormData(e.currentTarget);
     formData.set("healthCenterCountry", country);
+    formData.set("healthCenterCity", city);
+    formData.set("healthCenterId", clinicId);
+    formData.set("healthCenterName", selectedClinic.name);
     const result = await signUpStaff(formData);
     if (result?.error) {
       setError(result.error);
@@ -65,7 +105,7 @@ export default function StaffRegisterPage() {
               Staff Registration
             </h1>
             <p className="text-[#4c9a93] dark:text-gray-400 mt-2">
-              Register your health center. An admin will review and approve your account before you can log in.
+              Select your clinic. An admin will review and approve your account before you can log in.
             </p>
           </div>
 
@@ -112,11 +152,7 @@ export default function StaffRegisterPage() {
               <label htmlFor="healthCenterCountry" className="text-[#0d1b1a] dark:text-white text-sm font-medium">
                 Country
               </label>
-              <Select
-                value={country}
-                onValueChange={setCountry}
-                required
-              >
+              <Select value={country} onValueChange={onCountryChange} required>
                 <SelectTrigger
                   id="healthCenterCountry"
                   className="rounded-xl h-12 border-[#cfe7e5] dark:border-[#1e3a38]"
@@ -133,40 +169,59 @@ export default function StaffRegisterPage() {
               </Select>
             </div>
             <div className="flex flex-col gap-2">
-              <label htmlFor="healthCenterName" className="text-[#0d1b1a] dark:text-white text-sm font-medium">
-                Health Center Name
+              <label htmlFor="healthCenterCity" className="text-[#0d1b1a] dark:text-white text-sm font-medium">
+                City <span className="text-red-500">*</span>
               </label>
-              <Input
-                id="healthCenterName"
-                name="healthCenterName"
-                type="text"
-                placeholder="e.g. City Central Health"
-                className="rounded-xl h-12 border-[#cfe7e5] dark:border-[#1e3a38]"
-              />
+              <Select
+                value={city}
+                onValueChange={onCityChange}
+                required
+                disabled={!country}
+              >
+                <SelectTrigger
+                  id="healthCenterCity"
+                  className="rounded-xl h-12 border-[#cfe7e5] dark:border-[#1e3a38]"
+                >
+                  <SelectValue placeholder="Select city" />
+                </SelectTrigger>
+                <SelectContent>
+                  {cityOptions.map((c) => (
+                    <SelectItem key={c.value} value={c.value}>
+                      {c.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex flex-col gap-2">
-              <label htmlFor="healthCenterDescription" className="text-[#0d1b1a] dark:text-white text-sm font-medium">
-                Description (optional)
+              <label htmlFor="healthCenterId" className="text-[#0d1b1a] dark:text-white text-sm font-medium">
+                Clinic
               </label>
-              <Input
-                id="healthCenterDescription"
-                name="healthCenterDescription"
-                type="text"
-                placeholder="Brief description of your center"
-                className="rounded-xl h-12 border-[#cfe7e5] dark:border-[#1e3a38]"
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label htmlFor="healthCenterLocation" className="text-[#0d1b1a] dark:text-white text-sm font-medium">
-                Location (optional)
-              </label>
-              <Input
-                id="healthCenterLocation"
-                name="healthCenterLocation"
-                type="text"
-                placeholder="Address or city"
-                className="rounded-xl h-12 border-[#cfe7e5] dark:border-[#1e3a38]"
-              />
+              <Select
+                value={clinicId}
+                onValueChange={setClinicId}
+                required
+                disabled={!city || filteredClinics.length === 0}
+              >
+                <SelectTrigger
+                  id="healthCenterId"
+                  className="rounded-xl h-12 border-[#cfe7e5] dark:border-[#1e3a38]"
+                >
+                  <SelectValue placeholder={city ? "Select clinic" : "Select country and city first"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {filteredClinics.map((hc) => (
+                    <SelectItem key={hc.id} value={hc.id}>
+                      {hc.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {city && filteredClinics.length === 0 && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  No registered clinics in this city. Ask an admin to add your health center first.
+                </p>
+              )}
             </div>
             <div className="flex flex-col gap-2">
               <label htmlFor="password" className="text-[#0d1b1a] dark:text-white text-sm font-medium">
@@ -187,7 +242,7 @@ export default function StaffRegisterPage() {
 
             <Button
               type="submit"
-              disabled={loading}
+              disabled={loading || !clinicId}
               className="w-full h-14 rounded-xl bg-primary text-[#0d1b1a] font-bold text-lg"
             >
               {loading ? "Submitting…" : "Submit for approval"}

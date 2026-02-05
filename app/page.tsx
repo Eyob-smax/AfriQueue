@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
+import { TypewriterHero } from "@/components/landing/TypewriterHero";
 import { Button } from "@/components/ui/button";
 import { MaterialIcon } from "@/components/ui/material-icon";
 
@@ -27,10 +28,7 @@ export default function Home() {
                   </span>
                   Smart Healthcare for Africa
                 </div>
-                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black leading-tight tracking-tight text-slate-900 dark:text-white">
-                  Skip the Queue, <br className="hidden sm:block" />
-                  <span className="text-primary">Get Care Faster.</span>
-                </h1>
+                <TypewriterHero />
                 <p className="text-lg text-slate-600 dark:text-slate-400 max-w-xl leading-relaxed">
                   Empowering African clinics and patients with smart queue
                   management and digital healthcare tools. Say goodbye to long
