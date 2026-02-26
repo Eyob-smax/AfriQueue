@@ -98,7 +98,6 @@ export const auth = betterAuth({
         getTempName: (phoneNumber) => phoneNumber || "User",
       },
     }),
-    jwt(),
     nextCookies(),
   ],
 });
